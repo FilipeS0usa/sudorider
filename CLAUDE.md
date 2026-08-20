@@ -73,6 +73,14 @@ sync calls directly in a second job, gated on a `changed` output. Removing that 
 trigger, or the `deploy` job in the sync, reintroduces the failure quietly: the video appears in
 the repo, both workflows report success, and the site never updates.
 
+**Shorts are detected by probe, not by heuristic.** The feed carries no aspect ratio and every
+thumbnail is 480x360, so nothing in the feed distinguishes a 9:16 Short from a 16:9 video — and a
+title heuristic fails on real data (the channel's Short says "Short" in the title but carries no
+`#shorts` tag). `youtube.com/shorts/<id>` answers definitively: 200 for a Short, a redirect to
+`/watch` otherwise. The probe sends a consent cookie because from an EU IP every YouTube request
+302s to a consent interstitial, which would silently classify everything as "not a Short". The
+result is cached per video, so it is probed once and never again.
+
 **The RSS feed only returns the latest 15 entries.** `scripts/sync-videos.mjs` therefore *merges*
 into `videos.json` keyed by video id instead of overwriting it — otherwise the sixteenth upload
 would silently delete the back catalogue from the site. The script also refuses to write when the

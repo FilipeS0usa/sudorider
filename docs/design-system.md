@@ -36,8 +36,9 @@ below is the detail behind them.
 
 ### 1.1 Supplied by the Brand Guardian
 
-This spec references exactly these names. If a name here does not exist in the brand spec, the
-layout breaks silently — a mismatch is a bug in one of the two documents, not something to
+This spec references exactly these names. **`docs/brand.md` shipped in parallel using a `--sr-*`
+prefix — see [§13](#13-reconciliation-with-docsbrandmd) for the mapping; the brand spec's values
+win.** If a name here does not exist in the brand spec, the layout breaks silently — a mismatch is a bug in one of the two documents, not something to
 paper over locally.
 
 | Token | Role | Constraint this spec imposes |
@@ -1114,9 +1115,10 @@ region under headings over a JS filter.
 - Route map: `scrollWheelZoom: false` and `dragging: L.Browser.mobile ? false : true`. On a phone,
   a draggable map inside a long article traps the scroll — the standard fix is to disable dragging
   on touch and offer a "Ver no mapa grande" link to `/mapa`.
-- Track styling comes from the Cartography pass; from a UI perspective it must use
-  `--color-accent` at `weight: 4` with a 1px `--color-bg` casing so it stays visible over both
-  light and filtered-dark tiles.
+- Track styling comes from the Cartography pass. `docs/brand.md` resolves this as
+  `--sr-map-track` (the ink colour, **not** the accent) at `weight: 4` with a translucent casing,
+  deliberately reserving ocre for pins so a long track does not compete with them. Defer to that;
+  the earlier draft of this line said accent and was wrong. See §13.
 - GPX download is a `.btn--ghost` with the file size in the label — *"Descarregar GPX (42 KB)"*.
 
 ### 6.7 `/contacto` — Contacto
@@ -1370,6 +1372,80 @@ Things this spec depends on that belong to someone else. Each is a decision, not
 - [ ] `/rotas` with zero routes: reads as intentional
 - [ ] Screen reader: video card announces title once, nav announces expanded/collapsed
 - [ ] Long-title stress test: a 120-character PT title clamps to 2 lines without breaking the card
+
+---
+
+## 13. Reconciliation with `docs/brand.md`
+
+`docs/brand.md` was written in parallel with this document and landed a **different token prefix**
+(`--sr-*`) and its own scales. Both are valid; they just need one seam. **The brand spec wins on
+every value it defines** — colour, typeface, type steps, spacing, radii, measure. This document
+keeps only what the brand spec has no opinion about: layout widths, breakpoints, z-index, motion,
+gutters and section rhythm.
+
+Read this section as the translation table. Where a row says *missing*, the brand spec needs one
+more token — those are the only four real gaps.
+
+### 13.1 Name mapping
+
+| This spec (§1.1) | `docs/brand.md` | Note |
+| --- | --- | --- |
+| `--color-bg` | `--sr-bg` | — |
+| `--color-surface` | `--sr-bg-surface` | — |
+| `--color-surface-2` | **missing** | Recessed media well / map letterbox. Suggest `--sr-bg-well`: `--sr-warm-200` light, `--sr-cool-700` dark. `--sr-bg-hover` is the wrong semantic and `--sr-cool-600` is too light against `--sr-cool-800` cards |
+| `--color-border` | `--sr-border` | — |
+| `--color-border-strong` | **missing** | Needs **≥ 3:1** (ghost-button borders, empty-state dash, pin ring — WCAG 1.4.11). `--sr-border` (`#DFDBD3` on `#FBFAF8` ≈ 1.3:1) is decorative-only and cannot carry these. `--sr-warm-600` works at 6.7:1 but reads heavy; a mid step is better. Brand Guardian's call |
+| `--color-text` | `--sr-fg` | — |
+| `--color-text-muted` | `--sr-fg-muted` | — |
+| `--color-accent` **as a fill or graphic** | `--sr-accent` | — |
+| `--color-accent` **as text** | `--sr-accent-text` | **The brand spec is right and this one was sloppy.** It splits accent-as-graphic from accent-as-text because `#C86A0E` fails as body-size text on light ground. Everywhere §5 says `--color-accent` on a *link*, use `--sr-accent-text` |
+| `--color-accent-hover` | **missing** | For a filled button hover, `--sr-ocre-deep` (`#9E5205`) in both themes |
+| `--color-accent-contrast` | **missing — see §13.2** | — |
+| `--color-focus` | `--sr-focus` | Verified: ocre clears 3:1 on light bg (3.65:1), light surface (3.34:1) and dark bg (4.76:1) |
+| `--font-display` / `--font-body` | `--sr-font-sans` | One family for both. IBM Plex Sans covers the required diacritics |
+| `--font-mono` | `--sr-font-mono` | — |
+| `--shadow-1` / `--shadow-2` | `--sr-shadow` | Brand ships one step, already theme-aware. Collapse §2.3's two steps to one; hover changes `border-color` only |
+
+### 13.2 One contrast bug to avoid
+
+`--color-accent-contrast` (text on an accent fill — `.btn--primary`, §5.7) has no brand equivalent,
+and the obvious guess is wrong:
+
+| Text on `--sr-accent` `#C86A0E` | Ratio | AA normal text |
+| --- | --- | --- |
+| White `#FFFFFF` | **3.80:1** | ❌ fails |
+| Ink `#1B1A18` (`--sr-warm-900`) | **4.57:1** | ✅ passes |
+
+**Primary buttons take dark ink on ocre, not white.** White-on-orange is the reflex and it fails.
+If the brand later wants white button text, the fill has to darken to `--sr-ocre-deep` `#9E5205`
+(white on that = 6.6:1), not the other way round.
+
+### 13.3 Scales — brand wins, with two notes
+
+| Concern | Resolution |
+| --- | --- |
+| **Type scale** | Use `--sr-text-*`. Discard §2.2's `--fs-*` ramp. The two agree closely anyway (both land on 17px body, 24px h3, ~30px h2) and a fixed ramp is simpler to maintain than nine `clamp()`s. **Note:** only `--sr-text-hero` is fluid, so h1 is a fixed 38px at every width — check it at 390px against a long PT page title (*Equipamento* ≈ 231px, fits) |
+| **Spacing** | Use `--sr-space-*`. Its multiplier naming (`--sr-space-8` = 32px) is self-documenting; §2.1's `--space-6` = 32px is not. Same 4px base, same values |
+| **Radii** | Use `--sr-radius-*` (2/4/8px). Tighter than §2.3's 4/8/12 — that is a brand decision, take it. It does mean cards read sharper than the wireframes suggest |
+| **Measure** | `--sr-measure` (68ch) replaces `--width-prose` (36rem). Equivalent at 17px |
+| **Leading / tracking** | `--sr-leading-*`, `--sr-tracking-*`. Brand's `relaxed` is 1.65 vs §2.2's 1.7 — immaterial, take theirs |
+| **Map colours** | `--sr-map-*`. Track is the ink colour with a casing, **not** the accent; pins keep the accent. Corrected in §6.6 |
+
+### 13.4 What stays in this document
+
+The brand spec has no equivalent for these, and they are what makes the pages hold together:
+
+`--width-page` · `--gutter` · `--space-section` · `--header-h` · `--z-nav-panel` (the Leaflet
+clearance value) · `--dur-*` / `--ease-out` · the three breakpoints · every component structure in
+§5 · every page layout in §6 · the count-aware sparse rules in §3.3.
+
+### 13.5 Action for whoever implements
+
+`src/styles/tokens.css` should define the `--sr-*` layer verbatim from `docs/brand.md`, add the
+four missing tokens above, then define this document's structural tokens alongside. **Do not build
+an alias layer** that re-exports `--sr-bg` as `--color-bg`: two names for one value is how a design
+system starts to drift. Search-and-replace the `--color-*` / `--fs-*` / `--space-*` names in this
+document to their `--sr-*` equivalents as you implement, using §13.1.
 
 ---
 

@@ -18,6 +18,39 @@ import { fileURLToPath } from 'node:url';
 const CHANNEL_ID = 'UCLFnLwTJIcE_dL1N7D5epaA';
 const FEED = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL_ID}`;
 
+/**
+ * Consent cookie. From an EU IP, YouTube 302s every request to a consent
+ * interstitial, which would make every Shorts probe look like "not a Short".
+ * CI runners are usually outside the EU, but the cookie makes the result
+ * independent of where this runs.
+ */
+const CONSENT = 'SOCS=CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg';
+
+/**
+ * Is this a Short? The RSS feed carries no aspect ratio and every thumbnail is
+ * 480x360, so the feed alone cannot tell — and a title heuristic fails on real
+ * data (the channel's Short has "Short" in the title but no #shorts tag).
+ *
+ * youtube.com/shorts/<id> answers definitively: it serves 200 for a Short and
+ * redirects to /watch for anything else.
+ *
+ * Returns undefined if the probe fails, so a network blip degrades to "unknown"
+ * rather than mislabelling a video.
+ */
+async function probeIsShort(id) {
+	try {
+		const res = await fetch(`https://www.youtube.com/shorts/${id}`, {
+			redirect: 'manual',
+			headers: { cookie: CONSENT, 'user-agent': 'Mozilla/5.0 (compatible; sudorider-site-sync)' },
+		});
+		if (res.status === 200) return true;
+		if (res.status >= 300 && res.status < 400) return false;
+		return undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, 'src/data/videos.json');
 
@@ -76,7 +109,18 @@ if (fetched.length === 0) {
 
 const existing = await readExisting();
 const byId = new Map(existing.map((v) => [v.id, v]));
-for (const v of fetched) byId.set(v.id, { ...byId.get(v.id), ...v });
+
+for (const v of fetched) {
+	const prev = byId.get(v.id);
+	// A video's type never changes, so probe once and keep the answer.
+	const isShort =
+		typeof prev?.isShort === 'boolean' ? prev.isShort : await probeIsShort(v.id);
+	byId.set(v.id, {
+		...prev,
+		...v,
+		...(typeof isShort === 'boolean' ? { isShort } : {}),
+	});
+}
 
 const merged = [...byId.values()].sort(
 	(a, b) => new Date(b.published) - new Date(a.published),
