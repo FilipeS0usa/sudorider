@@ -7,10 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Website for **SudoRider** (<https://www.youtube.com/@SudoRider>), a Portuguese motovlog by Filipe —
 CFMOTO 450 MT ("a Dora"), riding around Portugal. Published to GitHub Pages.
 
-**Current state: greenfield.** Only `README.md` and the two licence files exist. Nothing is
-scaffolded — no `package.json`, no `src/`, no workflows. The README is the plan of record; read it
-before starting work. Commands below describe the intended Astro setup and will not run until the
-project is scaffolded.
+**Current state: scaffolded, not built.** Astro 7 is installed and building, with a placeholder
+`src/pages/index.astro`. None of the seven real pages, the map, the content collections or the
+workflows exist yet. The README is the plan of record; read it before starting work.
+
+`AGENTS.md` (from the Astro starter) carries Astro-specific mechanics and doc links — notably
+`astro dev --background` for running the dev server. This file carries project decisions.
 
 ## Commands
 
@@ -38,11 +40,14 @@ These are decisions already made. Do not quietly reverse them — raise it with 
   Code, comments, commit messages and the README stay English.
 - **Simple and clean.** Plain CSS with custom properties, no CSS framework. Astro ships zero client
   JS by default — keep it that way. The map is the only genuinely interactive piece.
-- **This is a GitHub Pages *project* page**, served from `filipes0usa.github.io/sudorider`, not
-  from a domain root. Astro needs `site` and `base: '/sudorider'` set in `astro.config.mjs`, and
-  every internal link and asset reference must respect that base or it will 404 in production
-  while working perfectly in `npm run dev`. If a custom domain is adopted later, `base` goes away
-  again — so route all internal links through Astro's base helpers rather than hardcoding paths.
+- **The site runs on the custom domain `sudorider.com`**, served from the root. `site` is set in
+  `astro.config.mjs` and `public/CNAME` carries the domain into the build output — deleting that
+  file silently drops the custom domain on the next deploy. No `base` is needed, but internal
+  links and assets should still go through `withBase()` in `src/lib/url.ts`, which is a
+  passthrough today and the single switch if the site ever falls back to the
+  `github.io/sudorider` project path. `import.meta.env.BASE_URL` carries no trailing slash, so
+  naive concatenation produces `/sudoriderfavicon.svg` — the starter's `index.astro` shipped with
+  exactly that bug.
 
 ## Architecture notes
 

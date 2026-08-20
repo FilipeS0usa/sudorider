@@ -1,0 +1,27 @@
+---
+// Asset and internal links go through withBase() — this site is served from
+// a subpath (/sudorider), so hardcoded absolute paths 404 in production.
+import { withBase } from '../lib/url';
+const desc =
+  'SudoRider — motovlog de Filipe numa CFMOTO 450 MT, por Portugal e por onde a estrada levar.';
+---
+
+<html lang="pt">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<link rel="icon" type="image/svg+xml" href={withBase("favicon.svg")} />
+		<link rel="icon" href={withBase("favicon.ico")} />
+		<title>SudoRider — trocar os ecrãs por um capacete</title>
+		<meta name="description" content={desc} />
+	</head>
+	<body>
+		<h1>SudoRider</h1>
+		<p>trocar os ecrãs por um capacete</p>
+		<p>Site em construção.</p>
+		<p>
+			<a href="https://www.youtube.com/@SudoRider">Canal no YouTube</a>
+		</p>
+	</body>
+</html>

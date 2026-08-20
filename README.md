@@ -13,8 +13,9 @@ This repository holds the source for the project's website, published to GitHub 
 
 ## Status
 
-🚧 **Pre-build.** The channel launched in August 2026; the site is being built alongside it.
-Nothing is scaffolded yet — this README is the plan.
+🚧 **Scaffolded, not built.** The channel launched in August 2026; the site is being built
+alongside it. Astro is installed and building with a placeholder homepage — the seven pages, the
+map, the route collection and the workflows below are still to come.
 
 ## What the site is for
 
@@ -47,6 +48,7 @@ developer documentation.
 | Route tracks | GPX files in the repo | Portable, exportable from any GPS app, renderable directly on the map |
 | Video data | YouTube RSS feed → committed JSON | Public feed, no API key and no quota |
 | Hosting | GitHub Pages via GitHub Actions | Free and already where the repo lives |
+| Domain | `sudorider.com` via `public/CNAME` | Served from the root, so no base-path juggling |
 
 **Why not the YouTube Data API:** it requires an API key, and any key shipped to a static site is
 public. The channel's RSS feed (`/feeds/videos.xml?channel_id=…`) is public, needs no
@@ -118,8 +120,9 @@ No manual deploy step.
 - **Contact form** — GitHub Pages is static and cannot send email. Either a plain `mailto:` link
   (zero setup, exposes the address to scrapers) or a third-party form service such as Formspree
   or Web3Forms (needs an account, free tier is limited). Not yet decided.
-- **Custom domain** — currently would publish to `filipes0usa.github.io/sudorider`. A domain like
-  `sudorider.pt` would need registering and a `CNAME` file.
+- **DNS for `sudorider.com`** — the domain is decided and `public/CNAME` is in place, but the DNS
+  records and the repository's Pages *Custom domain* setting still need configuring before a
+  deploy will serve correctly.
 - **Visual direction** — undecided beyond *simple and clean*.
 
 ## Licence
