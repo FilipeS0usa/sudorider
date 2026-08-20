@@ -1,3 +1,22 @@
+> **Scope of this licence — please read first.**
+>
+> The Creative Commons Attribution-ShareAlike 4.0 International licence reproduced below applies to
+> the **content** of the SudoRider website: the written text, photographs, video stills and route
+> data (including GPX tracks).
+>
+> It does **not** grant any right to use the **SudoRider name, wordmark, logo, or visual identity**.
+> Those are excluded from this licence and remain the property of the project's author. Trademarks
+> are conventionally outside the scope of a Creative Commons grant — see the CC FAQ on
+> [trademarks](https://creativecommons.org/faq/#can-i-apply-a-creative-commons-licence-to-a-trademark) —
+> and this note makes that explicit rather than leaving it to be inferred.
+>
+> In short: reuse and adapt the writing and the routes, with attribution and under the same terms.
+> Do not present your work as SudoRider, or use the name or mark as the identity of another project.
+>
+> This notice states scope only. The unmodified licence text follows.
+
+---
+
 Attribution-ShareAlike 4.0 International
 
 =======================================================================

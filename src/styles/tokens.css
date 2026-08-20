@@ -1,0 +1,179 @@
+/*
+ * Design tokens.
+ *
+ * The --sr-* layer comes verbatim from docs/brand.md; the structural tokens
+ * (widths, gutters, z-index, motion) come from docs/design-system.md §13.4.
+ * Where the two specs disagreed, the brand spec wins — see docs/design-system.md §13.
+ *
+ * There is deliberately NO alias layer re-exporting --sr-bg as --color-bg.
+ * Two names for one value is how a design system starts to drift.
+ *
+ * The IBM Plex webfonts are linked from the page <head>, not @imported here,
+ * so they do not block rendering of this stylesheet.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	/* ---------------------------------------------------------------
+	   Raw palette. Never reference these in components — use the
+	   semantic tokens below.
+	   --------------------------------------------------------------- */
+
+	/* Neutrals, warm — "cal" (whitewash). Light theme. */
+	--sr-warm-50: #fbfaf8; /* page ground */
+	--sr-warm-100: #f2f0ec; /* cards, code blocks */
+	--sr-warm-200: #e7e3db; /* hover surface, media wells */
+	--sr-warm-300: #dfdbd3; /* borders, dividers (decorative) */
+	--sr-warm-500: #8a867e; /* interactive borders — 3.48:1 on bg, 3.19:1 on surface */
+	--sr-warm-600: #5c5952; /* secondary text */
+	--sr-warm-900: #1b1a18; /* body text */
+
+	/* Neutrals, cool — "asfalto". Dark theme. Never #000. */
+	--sr-cool-900: #14161a; /* page ground */
+	--sr-cool-800: #1c1f24; /* cards */
+	--sr-cool-700: #2e333b; /* borders, media wells */
+	--sr-cool-600: #444a54; /* hover surface */
+	--sr-cool-500: #6b7280; /* interactive borders — 3.75:1 on bg, 3.42:1 on surface */
+	--sr-cool-400: #a0a5ad; /* secondary text */
+	--sr-cool-200: #e9eaec; /* body text */
+
+	/* Accent — "ocre". One hue; the same hex works in both themes. */
+	--sr-ocre: #c86a0e; /* graphics, rules, pins, fills */
+	--sr-ocre-deep: #9e5205; /* accent as text on light; filled-button hover */
+	--sr-ocre-lit: #e89b3d; /* accent as text on dark */
+	--sr-ocre-wash: #f6ebdf; /* callout ground, light */
+	--sr-ocre-dim: #241a10; /* callout ground, dark */
+
+	/* ---------------------------------------------------------------
+	   Semantic tokens. Light is the base definition — every token has a
+	   value here, so nothing depends on a media query firing.
+	   --------------------------------------------------------------- */
+	--sr-bg: var(--sr-warm-50);
+	--sr-bg-surface: var(--sr-warm-100);
+	--sr-bg-well: var(--sr-warm-200); /* recessed: media wells, map letterbox */
+	--sr-bg-hover: var(--sr-warm-200);
+	--sr-bg-callout: var(--sr-ocre-wash);
+	--sr-border: var(--sr-warm-300); /* decorative hairlines only */
+	--sr-border-strong: var(--sr-warm-500); /* interactive edges — meets 3:1 */
+	--sr-fg: var(--sr-warm-900);
+	--sr-fg-muted: var(--sr-warm-600);
+
+	--sr-accent: var(--sr-ocre); /* as a graphic/fill */
+	--sr-accent-text: var(--sr-ocre-deep); /* as text — ocre fails at body size on light */
+	--sr-accent-hover: var(--sr-ocre-deep);
+	/* Text on an accent fill. Ink, NOT white: white on ocre is 3.80:1 and
+	   fails AA; ink is 4.57:1. See docs/design-system.md §13.2. */
+	--sr-accent-contrast: var(--sr-warm-900);
+	--sr-focus: var(--sr-ocre);
+
+	--sr-shadow: 0 1px 2px rgb(27 26 24 / 0.06), 0 4px 12px rgb(27 26 24 / 0.06);
+
+	/* Map. Track is ink with a casing so it does not compete with the pins. */
+	--sr-map-track: var(--sr-fg);
+	--sr-map-track-casing: rgb(255 255 255 / 0.75);
+	--sr-map-pin-fill: var(--sr-accent);
+	--sr-map-pin-stroke: #1b1a18; /* literal: the pin needs ink in BOTH themes */
+
+	/* ---------------------------------------------------------------
+	   Type. Only --sr-text-hero is fluid; the rest are fixed steps.
+	   --------------------------------------------------------------- */
+	--sr-font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--sr-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+	--sr-text-2xs: 0.75rem;
+	--sr-text-xs: 0.8125rem;
+	--sr-text-sm: 0.9375rem;
+	--sr-text-md: 1.0625rem; /* body, 17px */
+	--sr-text-lg: 1.25rem;
+	--sr-text-xl: 1.5rem;
+	--sr-text-2xl: 1.875rem;
+	--sr-text-3xl: 2.375rem;
+	--sr-text-hero: clamp(2.375rem, 7vw, 3.75rem);
+
+	--sr-leading-tight: 1.15;
+	--sr-leading-snug: 1.25;
+	--sr-leading-normal: 1.5;
+	--sr-leading-relaxed: 1.65;
+
+	--sr-tracking-tight: -0.02em;
+	--sr-tracking-snug: -0.015em;
+	--sr-tracking-normal: 0;
+	--sr-tracking-wide: 0.06em;
+
+	--sr-measure: 68ch;
+
+	/* Spacing — 4px base, multiplier naming (--sr-space-8 = 32px). */
+	--sr-space-1: 0.25rem;
+	--sr-space-2: 0.5rem;
+	--sr-space-3: 0.75rem;
+	--sr-space-4: 1rem;
+	--sr-space-6: 1.5rem;
+	--sr-space-8: 2rem;
+	--sr-space-12: 3rem;
+	--sr-space-16: 4rem;
+	--sr-space-24: 6rem;
+
+	--sr-radius-sm: 2px;
+	--sr-radius-md: 4px;
+	--sr-radius-lg: 8px;
+
+	/* ---------------------------------------------------------------
+	   Structural. The brand spec has no opinion on these.
+	   --------------------------------------------------------------- */
+	--width-page: 68rem;
+	--gutter: clamp(1rem, 0.5rem + 2.2vw, 2rem);
+	--space-section: clamp(3rem, 1.6rem + 5.6vw, 6rem);
+	--header-h: 3.5rem;
+
+	--z-content: 1;
+	--z-header: 10;
+	--z-nav-panel: 1200; /* must clear Leaflet's own stacking context */
+
+	--dur-1: 120ms; /* colour, border, opacity */
+	--dur-2: 200ms; /* transform, poster zoom */
+	--ease-out: cubic-bezier(0.2, 0.6, 0.3, 1);
+
+	/*
+	 * Breakpoints — documentation only. CSS cannot use custom properties
+	 * inside @media, so the raw values are repeated in each query.
+	 *   base   390px  design floor
+	 *   --bp-sm 36rem / 576px   gear grid gains a second column
+	 *   --bp-md 52rem / 832px   THE NAV BREAKPOINT; header grows to 4rem
+	 *   --bp-lg 68rem / 1088px  --width-page reached; video grid at three columns
+	 */
+}
+
+/* System preference is dark, unless the reader explicitly chose light. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--sr-bg: var(--sr-cool-900);
+		--sr-bg-surface: var(--sr-cool-800);
+		--sr-bg-well: var(--sr-cool-700);
+		--sr-bg-hover: var(--sr-cool-600);
+		--sr-bg-callout: var(--sr-ocre-dim);
+		--sr-border: var(--sr-cool-700);
+		--sr-border-strong: var(--sr-cool-500);
+		--sr-fg: var(--sr-cool-200);
+		--sr-fg-muted: var(--sr-cool-400);
+		--sr-accent-text: var(--sr-ocre-lit);
+		--sr-map-track-casing: rgb(0 0 0 / 0.6);
+		--sr-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.3);
+	}
+}
+
+/* Same overrides, reserved for a future explicit toggle. */
+:root[data-theme='dark'] {
+	--sr-bg: var(--sr-cool-900);
+	--sr-bg-surface: var(--sr-cool-800);
+	--sr-bg-well: var(--sr-cool-700);
+	--sr-bg-hover: var(--sr-cool-600);
+	--sr-bg-callout: var(--sr-ocre-dim);
+	--sr-border: var(--sr-cool-700);
+	--sr-border-strong: var(--sr-cool-500);
+	--sr-fg: var(--sr-cool-200);
+	--sr-fg-muted: var(--sr-cool-400);
+	--sr-accent-text: var(--sr-ocre-lit);
+	--sr-map-track-casing: rgb(0 0 0 / 0.6);
+	--sr-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.3);
+}

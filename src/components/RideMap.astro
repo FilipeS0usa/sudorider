@@ -1,0 +1,34 @@
+---
+/**
+ * STUB — the Web GIS Developer replaces this with the real Leaflet map.
+ *
+ * Contract (do not change without updating both sides):
+ *   <RideMap locais={locais} height="70vh" />
+ *
+ * Full-bleed interactive map of ride locations. Each pin links to the video
+ * filmed there. Leaflet must load as a client:only island — it touches
+ * `window` at import and will break the static build otherwise.
+ */
+import type { Local } from '../lib/types';
+
+interface Props {
+	locais: Local[];
+	height?: string;
+}
+const { locais, height = '70vh' } = Astro.props;
+---
+
+<div class="ridemap-stub" style={`min-height:${height}`} data-pins={locais.length}>
+	<p>Mapa — {locais.length} local(is).</p>
+</div>
+
+<style>
+	.ridemap-stub {
+		display: grid;
+		place-items: center;
+		background: var(--sr-bg-well);
+		border: 1px dashed var(--sr-border-strong);
+		border-radius: var(--sr-radius-lg);
+		color: var(--sr-fg-muted);
+	}
+</style>

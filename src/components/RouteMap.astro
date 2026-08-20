@@ -1,0 +1,31 @@
+---
+/**
+ * STUB — the Web GIS Developer replaces this with the real GPX track renderer.
+ *
+ * Contract (do not change without updating both sides):
+ *   <RouteMap gpx="nome-da-rota.gpx" height="320px" />
+ *
+ * Renders one GPX track from public/gpx/. Track uses --sr-map-track (ink with
+ * a casing), NOT the accent — the accent belongs to pins.
+ */
+interface Props {
+	gpx: string;
+	height?: string;
+}
+const { gpx, height = '320px' } = Astro.props;
+---
+
+<div class="routemap-stub" style={`min-height:${height}`} data-gpx={gpx}>
+	<p>Traçado: {gpx}</p>
+</div>
+
+<style>
+	.routemap-stub {
+		display: grid;
+		place-items: center;
+		background: var(--sr-bg-well);
+		border: 1px dashed var(--sr-border-strong);
+		border-radius: var(--sr-radius-lg);
+		color: var(--sr-fg-muted);
+	}
+</style>

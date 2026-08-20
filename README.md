@@ -128,5 +128,8 @@ No manual deploy step.
 ## Licence
 
 - **Code** — [MIT](LICENSE)
-- **Content** — text, images and video stills are
+- **Content** — text, images, video stills and route data are
   [CC BY-SA 4.0](LICENSE-CONTENT.md)
+- **Not licensed** — the SudoRider name, wordmark, logo and visual identity are excluded from the
+  content licence and remain the author's. Reuse the writing and the routes; don't reuse the
+  identity.
