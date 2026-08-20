@@ -2,6 +2,7 @@
 // Asset and internal links go through withBase() — this site is served from
 // a subpath (/sudorider), so hardcoded absolute paths 404 in production.
 import { withBase } from '../lib/url';
+import videos from '../data/videos.json';
 const desc =
   'SudoRider — motovlog de Filipe numa CFMOTO 450 MT, por Portugal e por onde a estrada levar.';
 ---
@@ -20,6 +21,21 @@ const desc =
 		<h1>SudoRider</h1>
 		<p>trocar os ecrãs por um capacete</p>
 		<p>Site em construção.</p>
+
+		<!-- Placeholder: proves the RSS sync feeds the build. The real Vídeos
+		     page replaces this. -->
+		<h2>Últimos vídeos</h2>
+		<ul>
+			{videos.map((v) => (
+				<li>
+					<a href={v.url}>{v.title}</a>
+					<time datetime={v.published}>
+						{new Date(v.published).toLocaleDateString('pt-PT')}
+					</time>
+				</li>
+			))}
+		</ul>
+
 		<p>
 			<a href="https://www.youtube.com/@SudoRider">Canal no YouTube</a>
 		</p>

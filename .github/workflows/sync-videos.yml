@@ -1,0 +1,45 @@
+name: Sync videos
+
+on:
+  schedule:
+    # 06:00 UTC daily. Cron on GitHub Actions is best-effort and can be delayed
+    # under load, which is fine for this — nothing depends on the exact minute.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: sync
+        run: node scripts/sync-videos.mjs
+
+      - name: Commit if the feed brought anything new
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/data/videos.json
+          git commit -m 'Update videos from channel feed'
+          git push
+
+  # Separate job: a GITHUB_TOKEN commit does not fire the `push` trigger, so
+  # the deploy has to be called rather than waited for.
+  deploy:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml

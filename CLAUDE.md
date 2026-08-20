@@ -8,8 +8,8 @@ Website for **SudoRider** (<https://www.youtube.com/@SudoRider>), a Portuguese m
 CFMOTO 450 MT ("a Dora"), riding around Portugal. Published to GitHub Pages.
 
 **Current state: scaffolded, not built.** Astro 7 is installed and building, with a placeholder
-`src/pages/index.astro`. None of the seven real pages, the map, the content collections or the
-workflows exist yet. The README is the plan of record; read it before starting work.
+`src/pages/index.astro`. Both workflows exist (Pages deploy and the
+daily video sync). None of the seven real pages, the map or the content collections do yet. The README is the plan of record; read it before starting work.
 
 `AGENTS.md` (from the Astro starter) carries Astro-specific mechanics and doc links — notably
 `astro dev --background` for running the dev server. This file carries project decisions.
@@ -18,9 +18,10 @@ workflows exist yet. The README is the plan of record; read it before starting w
 
 ```bash
 npm install
-npm run dev      # dev server, hot reload
-npm run build    # static build to ./dist
-npm run preview  # serve the built output
+npm run dev          # dev server, hot reload
+npm run build        # static build to ./dist
+npm run preview      # serve the built output
+npm run sync:videos  # refresh src/data/videos.json from the channel RSS feed
 ```
 
 No test suite exists yet; there is no framework decision recorded for one.
@@ -51,10 +52,10 @@ These are decisions already made. Do not quietly reverse them — raise it with 
 
 ## Architecture notes
 
-**Video listing is generated, not authored.** A scheduled workflow fetches
-`https://www.youtube.com/feeds/videos.xml?channel_id=UCLFnLwTJIcE_dL1N7D5epaA` and commits
-`src/data/videos.json`. Never hand-edit that file — the next sync overwrites it. To change how
-videos are *presented*, edit the component, not the data.
+**Video listing is generated, not authored.** `sync-videos.yml` runs `scripts/sync-videos.mjs`
+daily, which reads the channel's RSS feed and commits `src/data/videos.json`. Never hand-edit that
+file — the next sync overwrites its fields. To change how videos are *presented*, edit the
+component, not the data. Run it locally with `npm run sync:videos`.
 
 **Leaflet cannot be server-rendered.** It touches `window` at import time, so it must be an island
 excluded from the static build (`client:only`), not a plain component. Expect any "the map broke
@@ -65,12 +66,18 @@ the build" symptom to trace back to this.
 (Markdown route write-ups, each referencing a GPX file in `public/gpx/`). A map pin's whole purpose
 is to link a place to the video filmed there, so a pin without a valid video id is a bug.
 
-**The two workflows do not chain by default.** `sync-videos.yml` commits `videos.json` using the
-default `GITHUB_TOKEN`, and commits made with that token deliberately do not trigger further
-workflow runs. Left alone, a new video lands in the repo but never reaches the built site. The
-sync workflow therefore has to either invoke the deploy itself (`workflow_call` /
-`workflow_dispatch`) or do the build and publish in the same job. Expect "the video is in
-videos.json but not on the site" to trace back to this.
+**The two workflows chain explicitly, and must keep doing so.** `sync-videos.yml` commits
+`videos.json` with the default `GITHUB_TOKEN`, and commits made with that token deliberately do
+not fire the `push` trigger. So `deploy.yml` is a reusable workflow (`on: workflow_call`) that the
+sync calls directly in a second job, gated on a `changed` output. Removing that `workflow_call`
+trigger, or the `deploy` job in the sync, reintroduces the failure quietly: the video appears in
+the repo, both workflows report success, and the site never updates.
+
+**The RSS feed only returns the latest 15 entries.** `scripts/sync-videos.mjs` therefore *merges*
+into `videos.json` keyed by video id instead of overwriting it — otherwise the sixteenth upload
+would silently delete the back catalogue from the site. The script also refuses to write when the
+feed parses to zero entries, so a change to YouTube's feed format fails loudly rather than
+emptying the file.
 
 **Routes are a content collection**, so publishing one is a Markdown file plus a GPX track — the
 route page, the routes index and the map all derive from that. Keep it a one-file job; that was the
