@@ -31,8 +31,12 @@ export interface Equipamento {
 	name: string;
 	/** e.g. "Câmara", "Suporte", "Capacete", "Comunicação", "Bagagem". */
 	category: string;
-	/** Why this one — the useful part, not a spec sheet. */
-	note: string;
+	/**
+	 * Why this one — the useful part, not a spec sheet. Optional because the
+	 * gear list arrived as names only; a card renders without it rather than
+	 * carrying an invented reason.
+	 */
+	note?: string;
 	/** Optional manufacturer link. */
 	url?: string;
 }

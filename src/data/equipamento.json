@@ -1,1 +1,39 @@
-[]
+[
+  {
+    "name": "CFMOTO 450 MT",
+    "category": "Mota",
+    "note": "A Dora."
+  },
+  {
+    "name": "Nexx RALLY Carbon Gravix",
+    "category": "Capacete"
+  },
+  {
+    "name": "Cardo Spirit",
+    "category": "Comunicação"
+  },
+  {
+    "name": "Casaco REV'IT Tectonic H2O",
+    "category": "Vestuário"
+  },
+  {
+    "name": "Casaco REV'IT Quantum 3 Air",
+    "category": "Vestuário"
+  },
+  {
+    "name": "Calças REV'IT Tectonic H2O",
+    "category": "Vestuário"
+  },
+  {
+    "name": "Botas REV'IT Expedition GTX",
+    "category": "Vestuário"
+  },
+  {
+    "name": "DJI Osmo Action 6",
+    "category": "Vídeo"
+  },
+  {
+    "name": "DJI Mic 3",
+    "category": "Áudio"
+  }
+]

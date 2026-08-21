@@ -8,7 +8,9 @@
  */
 interface Props {
 	name: string;
-	note: string;
+	/** Omitted until Filipe writes it — the card drops the line rather than
+	    showing a placeholder. */
+	note?: string;
 	url?: string;
 }
 
@@ -19,7 +21,7 @@ const { name, note, url } = Astro.props;
 	<h3 class="g-item__name">
 		{url ? <a href={url} rel="noopener">{name}</a> : name}
 	</h3>
-	<p class="g-item__why">{note}</p>
+	{note && <p class="g-item__why">{note}</p>}
 </article>
 
 <style>
