@@ -22,11 +22,11 @@ import PortugalOutline from '../components/PortugalOutline.astro';
 import { SITE } from '../components/site';
 import { withBase } from '../lib/url';
 import type { Local, Equipamento, Video } from '../lib/types';
-import videosData from '../data/videos.json';
 import locaisData from '../data/locais.json';
+import { videos } from '../lib/videos';
 import equipamentoData from '../data/equipamento.json';
 
-const videos = videosData as Video[];
+// Shorts are excluded — see src/lib/videos.ts.
 const locais = locaisData as Local[];
 const equipamento = equipamentoData as Equipamento[];
 
@@ -51,7 +51,7 @@ const notaMapa =
 		<div class="container hero">
 			<div class="hero__intro">
 				<h1 class="wordmark hero__wordmark">
-					<span class="wordmark__sudo">sudo</span>rider
+					<span class="wordmark__sudo">Sudo</span>Rider
 				</h1>
 				<p class="hero__tagline">{SITE.tagline}</p>
 				<p class="hero__text">

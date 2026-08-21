@@ -7,10 +7,9 @@
  */
 import Page from '../layouts/Page.astro';
 import VideoList from '../components/VideoList.astro';
-import type { Video } from '../lib/types';
-import videosData from '../data/videos.json';
+import { videos as publicados } from '../lib/videos';
 
-const videos = (videosData as Video[])
+const videos = publicados
 	.slice()
 	.sort((a, b) => new Date(b.published).valueOf() - new Date(a.published).valueOf());
 

@@ -52,6 +52,10 @@ These are decisions already made. Do not quietly reverse them — raise it with 
 
 ## Architecture notes
 
+**The wordmark is `SudoRider`, capitalised.** `docs/brand.md` §7 specifies a lowercase
+`sudorider`; Filipe overrode that. The ochre rule still spans exactly `Sudo`. The brand doc has
+not been rewritten, so treat this file as the authority where the two disagree.
+
 **Video listing is generated, not authored.** `sync-videos.yml` runs `scripts/sync-videos.mjs`
 daily, which reads the channel's RSS feed and commits `src/data/videos.json`. Never hand-edit that
 file — the next sync overwrites its fields. To change how videos are *presented*, edit the
@@ -79,6 +83,12 @@ minutes later and always succeeds from a home connection. It appears to be datac
 `sync-videos.mjs` therefore sends a browser user-agent and retries four times with backoff before
 giving up. Do not reduce this to a single attempt: the visible symptom is a red workflow, but the
 real cost is a morning where a newly published video is silently skipped until the next run.
+
+**Shorts are excluded from the site by choice.** Filipe wants the site to carry the full
+motovlogs only. The filter lives in `src/lib/videos.ts`, which every page and component reads
+videos through — not in the sync, which still records Shorts and their `isShort` flag. So
+reversing the decision is one line and no history is lost. `VideoCard` keeps its 9:16 handling for
+the same reason; it is currently unexercised, not dead.
 
 **Shorts are detected by probe, not by heuristic.** The feed carries no aspect ratio and every
 thumbnail is 480x360, so nothing in the feed distinguishes a 9:16 Short from a 16:9 video — and a

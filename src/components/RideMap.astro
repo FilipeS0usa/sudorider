@@ -17,7 +17,7 @@
  * instead of receiving props, so the two halves stay independent.
  */
 import type { Local, Video } from '../lib/types';
-import videosData from '../data/videos.json';
+import { videos } from '../lib/videos';
 
 // Leaflet's stylesheet, imported here rather than globally so Astro only ships
 // it on the pages that use a map (docs/design-system.md §10).
@@ -35,7 +35,7 @@ const { locais, height = '70vh' } = Astro.props;
 const CSS_LENGTH = /^[\w%.\s()+*/,-]+$/;
 const mapHeight = CSS_LENGTH.test(height) ? height : '70vh';
 
-const videos = videosData as Video[];
+// Shorts are excluded — see src/lib/videos.ts.
 const byId = new Map(videos.map((video) => [video.id, video]));
 
 /** PT month abbreviations, spelled out rather than left to the build machine's ICU. */

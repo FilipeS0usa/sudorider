@@ -19,10 +19,10 @@ import RideMap from '../components/RideMap.astro';
 import { dataCurta, dataISO, tituloLimpo } from '../components/format';
 import type { Local, Video } from '../lib/types';
 import locaisData from '../data/locais.json';
-import videosData from '../data/videos.json';
+import { videos } from '../lib/videos';
 
 const locais = locaisData as Local[];
-const videos = videosData as Video[];
+// Shorts are excluded — see src/lib/videos.ts.
 
 const pontos = locais.map((local) => {
 	const video = videos.find((item) => item.id === local.video);
