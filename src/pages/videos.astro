@@ -1,0 +1,27 @@
+---
+/**
+ * Vídeos (design-system §6.2).
+ *
+ * No filters, no tabs, no "Shorts only" toggle — all of those need JS and none
+ * of them earn their keep below ~50 videos. Newest first, always.
+ */
+import Page from '../layouts/Page.astro';
+import VideoList from '../components/VideoList.astro';
+import type { Video } from '../lib/types';
+import videosData from '../data/videos.json';
+
+const videos = (videosData as Video[])
+	.slice()
+	.sort((a, b) => new Date(b.published).valueOf() - new Date(a.published).valueOf());
+
+const contagem = videos.length === 1 ? '1 vídeo' : `${videos.length} vídeos`;
+---
+
+<Page
+	title="Vídeos"
+	description="Todos os vídeos do canal SudoRider, do mais recente para o mais antigo."
+	lead="Todos os vídeos do canal, do mais recente para o mais antigo."
+	count={videos.length > 0 ? contagem : undefined}
+>
+	<VideoList videos={videos} headingLevel={2} />
+</Page>

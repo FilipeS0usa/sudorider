@@ -1,34 +1,645 @@
 ---
 /**
- * STUB — the Web GIS Developer replaces this with the real Leaflet map.
+ * The rides map — one pin per place a video was filmed, each pin opening that
+ * video.
  *
- * Contract (do not change without updating both sides):
  *   <RideMap locais={locais} height="70vh" />
  *
- * Full-bleed interactive map of ride locations. Each pin links to the video
- * filmed there. Leaflet must load as a client:only island — it touches
- * `window` at import and will break the static build otherwise.
+ * Leaflet reads `window` while it is being imported, so it can never run in the
+ * static build. It lives in the `<script>` at the bottom of this file, which
+ * Astro bundles as a browser module and never executes at build time — the
+ * .astro equivalent of the `client:only` island CLAUDE.md asks for (there is no
+ * UI framework installed here, so there is no component to hydrate). Nothing
+ * above the fence imports Leaflet, and nothing below it runs on the server.
+ *
+ * Everything the map needs is baked into the markup at build time: coordinates
+ * in a data attribute, popups in <template> elements. The script reads the DOM
+ * instead of receiving props, so the two halves stay independent.
  */
-import type { Local } from '../lib/types';
+import type { Local, Video } from '../lib/types';
+import videosData from '../data/videos.json';
+
+// Leaflet's stylesheet, imported here rather than globally so Astro only ships
+// it on the pages that use a map (docs/design-system.md §10).
+import 'leaflet/dist/leaflet.css';
 
 interface Props {
 	locais: Local[];
 	height?: string;
 }
+
 const { locais, height = '70vh' } = Astro.props;
+
+// The height lands in an inline custom property, so refuse anything that is not
+// a plain CSS length expression rather than pasting it into the style attribute.
+const CSS_LENGTH = /^[\w%.\s()+*/,-]+$/;
+const mapHeight = CSS_LENGTH.test(height) ? height : '70vh';
+
+const videos = videosData as Video[];
+const byId = new Map(videos.map((video) => [video.id, video]));
+
+/** PT month abbreviations, spelled out rather than left to the build machine's ICU. */
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+function shortDate(iso: string): string {
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return '';
+	return `${date.getUTCDate()} ${MESES[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/**
+ * Strip the trailing hashtag run YouTube titles carry (§5.1). Two or more, so
+ * a meaningful single tag such as "| Motovlog #1" survives.
+ *
+ * Duplicated deliberately: docs/design-system.md §10 puts cleanTitle() in
+ * src/lib/video.ts, which is another agent's file and does not exist yet.
+ * Delete this and import it once it does.
+ */
+function cleanTitle(raw: string): string {
+	return raw.replace(/(?:\s+#[^\s#]+){2,}\s*$/u, '').replace(/\s+/g, ' ').trim();
+}
+
+// A pin exists to link a place to a video (CLAUDE.md), so a pin without an id
+// is a bug and should stop the build rather than ship a dead popup. A pin whose
+// id is not in videos.json is only a warning: that file is generated from the
+// channel feed and may legitimately lag behind a new pin. The popup still links
+// to YouTube correctly, it just shows no title or date.
+for (const local of locais) {
+	if (!local.video || !local.video.trim()) {
+		throw new Error(
+			`RideMap: the pin "${local.name}" in src/data/locais.json has no video id. ` +
+				'A pin exists to link a place to the video filmed there.',
+		);
+	}
+	if (!byId.has(local.video)) {
+		console.warn(
+			`[RideMap] pin "${local.name}" references video "${local.video}", which is not in ` +
+				'src/data/videos.json. The popup will link out but show no title or date. ' +
+				'Run `npm run sync:videos` if the video is newer than the data file.',
+		);
+	}
+}
+
+const pins = locais.map((local) => {
+	const video = byId.get(local.video);
+	return {
+		name: local.name,
+		lat: local.lat,
+		lng: local.lng,
+		note: local.note ?? '',
+		href: video?.url ?? `https://www.youtube.com/watch?v=${local.video}`,
+		// mqdefault is a true 16:9 frame; the hqdefault stored in videos.json is
+		// 4:3 with letterbox bars baked in, which the popup well would show.
+		thumb: `https://i.ytimg.com/vi/${local.video}/mqdefault.jpg`,
+		title: video ? cleanTitle(video.title) : '',
+		iso: video?.published ?? '',
+		date: video ? shortDate(video.published) : '',
+	};
+});
+
+/** Only the geometry crosses into the browser; the popups travel as markup. */
+const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 ---
 
-<div class="ridemap-stub" style={`min-height:${height}`} data-pins={locais.length}>
-	<p>Mapa — {locais.length} local(is).</p>
+<div
+	class="sr-map"
+	data-sr-ridemap
+	data-state="nojs"
+	data-pins={JSON.stringify(markers)}
+	style={`--sr-map-height:${mapHeight}`}
+>
+	<div class="sr-map__canvas" role="region" aria-label="Mapa dos locais filmados"></div>
+
+	<p class="sr-map__note sr-map__note--nojs">
+		O mapa precisa de JavaScript. A lista de locais está aqui em baixo.
+	</p>
+	<p class="sr-map__note sr-map__note--status" hidden>A carregar o mapa…</p>
+
+	<div class="sr-map__popups">
+		{
+			pins.map((pin) => (
+				<template>
+					<a class="sr-pop" href={pin.href}>
+						<img
+							class="sr-pop__thumb"
+							src={pin.thumb}
+							alt=""
+							width="320"
+							height="180"
+							loading="lazy"
+							decoding="async"
+							referrerpolicy="strict-origin-when-cross-origin"
+						/>
+						<span class="sr-pop__text">
+							<span class="sr-pop__place">{pin.name}</span>
+							{pin.date && (
+								<time class="sr-pop__date" datetime={pin.iso}>
+									{pin.date}
+								</time>
+							)}
+							{pin.title && <span class="sr-pop__title">{pin.title}</span>}
+							{pin.note && <span class="sr-pop__note">{pin.note}</span>}
+							<span class="sr-pop__cta">
+								Ver o vídeo <span aria-hidden="true">→</span>
+							</span>
+						</span>
+					</a>
+				</template>
+			))
+		}
+	</div>
 </div>
 
 <style>
-	.ridemap-stub {
-		display: grid;
-		place-items: center;
+	.sr-map {
+		/*
+		 * Leaflet's panes and controls run from z-index 400 to 1000 and its
+		 * container is positioned but creates no stacking context, so without
+		 * this the zoom control would sit on top of the site header. `isolate`
+		 * contains the whole range below --z-header / --z-nav-panel.
+		 */
+		isolation: isolate;
+		position: relative;
+		height: var(--sr-map-height, 70vh);
+		/* Never taller than the viewport on a landscape phone. */
+		min-height: min(26rem, 70svh);
 		background: var(--sr-bg-well);
-		border: 1px dashed var(--sr-border-strong);
-		border-radius: var(--sr-radius-lg);
+		border-block: 1px solid var(--sr-border);
+		overflow: hidden;
+
+		/*
+		 * OSM raster tiles are the one third-party surface in the palette.
+		 * Light: a touch of desaturation settles the tile greens and blues
+		 * next to the warm page ground without moving their luminance, so the
+		 * contrast figures the brand spec computed for pins still hold.
+		 * Dark: invert + hue-rotate flips the tiles to a dark base while
+		 * keeping hues roughly where they were. It applies to the tile pane
+		 * alone, so pins, track, controls and attribution keep their real
+		 * colours — and it needs no second tile host and no API key.
+		 */
+		--sr-map-tiles: saturate(0.85);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme='light']) .sr-map {
+			--sr-map-tiles: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.9) saturate(0.75);
+		}
+	}
+
+	:root[data-theme='dark'] .sr-map {
+		--sr-map-tiles: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.9) saturate(0.75);
+	}
+
+	.sr-map__canvas {
+		position: absolute;
+		inset: 0;
+		background: var(--sr-bg-well);
+	}
+
+	.sr-map__note {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-start: 50%;
+		z-index: 500; /* above the tile pane, below Leaflet's controls */
+		translate: 0 -50%;
+		margin: 0;
+		padding: var(--sr-space-4);
 		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-sm);
+		text-align: center;
+		text-wrap: balance;
+		pointer-events: none;
+	}
+
+	.sr-map__note a {
+		pointer-events: auto;
+	}
+
+	.sr-map__popups {
+		display: none;
+	}
+
+	/* ---------------------------------------------------------------
+	   Leaflet's own DOM is built at runtime, so it never carries Astro's
+	   scope attribute — these have to be :global, anchored on .sr-map.
+	   --------------------------------------------------------------- */
+
+	.sr-map :global(.leaflet-container) {
+		background: var(--sr-bg-well);
+		font-family: var(--sr-font-sans);
+		font-size: var(--sr-text-sm);
+	}
+
+	.sr-map :global(.leaflet-tile-pane) {
+		filter: var(--sr-map-tiles);
+	}
+
+	.sr-map :global(a:focus-visible),
+	.sr-map :global(.leaflet-container:focus-visible),
+	.sr-map :global(.sr-pin:focus-visible) {
+		outline: 2px solid var(--sr-focus);
+		outline-offset: 2px;
+	}
+
+	/* Attribution — required by the ODbL, so it stays legible in both themes. */
+	.sr-map :global(.leaflet-control-attribution) {
+		background: color-mix(in srgb, var(--sr-bg-surface) 90%, transparent);
+		color: var(--sr-fg-muted);
+		padding: 2px var(--sr-space-2);
+		border-start-start-radius: var(--sr-radius-sm);
+		font-size: var(--sr-text-2xs);
+	}
+
+	.sr-map :global(.leaflet-control-attribution a) {
+		color: var(--sr-accent-text);
+	}
+
+	/* Zoom control — 44px targets (§9), site surfaces instead of Leaflet white. */
+	.sr-map :global(.leaflet-bar) {
+		border: 1px solid var(--sr-border-strong);
+		border-radius: var(--sr-radius-md);
+		box-shadow: var(--sr-shadow);
+	}
+
+	.sr-map :global(.leaflet-bar a) {
+		width: 2.75rem;
+		height: 2.75rem;
+		background: var(--sr-bg-surface);
+		border-block-end: 1px solid var(--sr-border);
+		color: var(--sr-fg);
+		font-family: var(--sr-font-sans);
+		font-size: var(--sr-text-lg);
+		line-height: 2.75rem;
+	}
+
+	.sr-map :global(.leaflet-bar a:last-child) {
+		border-block-end: 0;
+	}
+
+	.sr-map :global(.leaflet-bar a:hover) {
+		background: var(--sr-bg-hover);
+		color: var(--sr-fg);
+	}
+
+	.sr-map :global(.leaflet-bar a.leaflet-disabled) {
+		background: var(--sr-bg-surface);
+		color: var(--sr-fg-muted);
+		opacity: 0.55;
+	}
+
+	/* ---------------------------------------------------------------
+	   Pins. Ochre fill with a mandatory 2px ink stroke: the fill alone is
+	   2.68:1 over OSM forest green and 2.37:1 over water (docs/brand.md §5).
+	   The stroke is what guarantees the pin separates from any tile — it is
+	   not decoration.
+	   --------------------------------------------------------------- */
+
+	.sr-map :global(.sr-pin) {
+		background: none;
+		border: 0;
+	}
+
+	.sr-map :global(.sr-pin__dot) {
+		position: relative;
+		display: block;
+		width: 1.125rem;
+		height: 1.125rem;
+		background: var(--sr-map-pin-fill);
+		border: 2px solid var(--sr-map-pin-stroke);
+		border-radius: 50%;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+		transition:
+			scale var(--dur-1) var(--ease-out),
+			box-shadow var(--dur-1) var(--ease-out);
+	}
+
+	/* 44×44 touch target without a 44px dot (WCAG 2.5.8). */
+	.sr-map :global(.sr-pin__dot::after) {
+		content: '';
+		position: absolute;
+		inset-block-start: 50%;
+		inset-inline-start: 50%;
+		width: 2.75rem;
+		height: 2.75rem;
+		translate: -50% -50%;
+	}
+
+	.sr-map :global(.sr-pin:hover .sr-pin__dot),
+	.sr-map :global(.sr-pin:focus-visible .sr-pin__dot),
+	.sr-map :global(.sr-pin.is-open .sr-pin__dot) {
+		scale: 1.15;
+		/* Survives prefers-reduced-motion, where the scale is suppressed. */
+		box-shadow:
+			0 0 0 4px color-mix(in srgb, var(--sr-map-pin-fill) 40%, transparent),
+			0 1px 2px rgb(0 0 0 / 0.35);
+	}
+
+	/* ---------------------------------------------------------------
+	   Popup. Leaflet's own chrome is fully replaced (§5.4). The width comes
+	   from the popup options, not from here: Leaflet writes an inline width
+	   onto .leaflet-popup-content and CSS would need !important to win.
+	   --------------------------------------------------------------- */
+
+	.sr-map :global(.leaflet-popup-content-wrapper) {
+		background: var(--sr-bg-surface);
+		color: var(--sr-fg);
+		border: 1px solid var(--sr-border-strong);
+		border-radius: var(--sr-radius-md);
+		box-shadow: var(--sr-shadow);
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.sr-map :global(.leaflet-popup-content) {
+		margin: 0;
+		line-height: var(--sr-leading-normal);
+	}
+
+	.sr-map :global(.leaflet-popup-tip) {
+		background: var(--sr-bg-surface);
+		border: 1px solid var(--sr-border-strong);
+		box-shadow: none;
+	}
+
+	.sr-map :global(.leaflet-popup-close-button) {
+		inset-block-start: 0;
+		inset-inline-end: 0;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		background: color-mix(in srgb, var(--sr-bg-surface) 82%, transparent);
+		border-end-start-radius: var(--sr-radius-md);
+		color: var(--sr-fg-muted);
+		font: var(--sr-text-lg) / 2.75rem var(--sr-font-sans);
+		text-align: center;
+	}
+
+	.sr-map :global(.leaflet-popup-close-button:hover) {
+		background: var(--sr-bg-surface);
+		color: var(--sr-fg);
+	}
+
+	.sr-map :global(.sr-pop) {
+		display: block;
+		width: 100%;
+		color: var(--sr-fg);
+		text-decoration: none;
+	}
+
+	.sr-map :global(.sr-pop__thumb) {
+		display: block;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 16 / 9;
+		background: var(--sr-bg-well);
+		object-fit: cover;
+	}
+
+	.sr-map :global(.sr-pop__text) {
+		display: block;
+		padding: var(--sr-space-3);
+	}
+
+	.sr-map :global(.sr-pop__place) {
+		display: block;
+		font-size: var(--sr-text-md);
+		font-weight: 600;
+		letter-spacing: var(--sr-tracking-snug);
+		line-height: var(--sr-leading-snug);
+	}
+
+	.sr-map :global(.sr-pop__date) {
+		display: block;
+		margin-block-start: 2px;
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-2xs);
+	}
+
+	.sr-map :global(.sr-pop__title) {
+		display: -webkit-box;
+		margin-block-start: var(--sr-space-2);
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		font-size: var(--sr-text-sm);
+		line-height: var(--sr-leading-snug);
+	}
+
+	.sr-map :global(.sr-pop__note) {
+		display: -webkit-box;
+		margin-block-start: var(--sr-space-1);
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		overflow: hidden;
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-xs);
+		line-height: var(--sr-leading-snug);
+	}
+
+	.sr-map :global(.sr-pop__cta) {
+		display: block;
+		margin-block-start: var(--sr-space-2);
+		color: var(--sr-accent-text);
+		font-size: var(--sr-text-sm);
+		font-weight: 600;
+	}
+
+	.sr-map :global(.sr-pop:hover .sr-pop__cta),
+	.sr-map :global(.sr-pop:focus-visible .sr-pop__cta) {
+		text-decoration: underline;
+		text-decoration-thickness: 0.08em;
+		text-underline-offset: 0.15em;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.sr-map :global(.sr-pin__dot) {
+			transition: none;
+		}
+
+		.sr-map :global(.sr-pin:hover .sr-pin__dot),
+		.sr-map :global(.sr-pin:focus-visible .sr-pin__dot),
+		.sr-map :global(.sr-pin.is-open .sr-pin__dot) {
+			scale: 1;
+		}
 	}
 </style>
+
+<script>
+	import * as L from 'leaflet';
+
+	interface Pin {
+		name: string;
+		lat: number;
+		lng: number;
+	}
+
+	// Raster tiles from OSM directly: no key, no billing account, no second
+	// host (CLAUDE.md). Attribution is an ODbL requirement, not a courtesy;
+	// OSM permits translating the credit, so it reads in Portuguese.
+	const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+	const ATTRIBUTION =
+		'&copy; colaboradores do <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+	const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	function readPins(root: HTMLElement): Pin[] {
+		try {
+			const parsed: unknown = JSON.parse(root.dataset.pins ?? '[]');
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter(
+				(pin): pin is Pin =>
+					typeof pin?.lat === 'number' && typeof pin?.lng === 'number' && Number.isFinite(pin.lat),
+			);
+		} catch {
+			return [];
+		}
+	}
+
+	function build(root: HTMLElement) {
+		const canvas = root.querySelector<HTMLElement>('.sr-map__canvas');
+		if (!canvas) return;
+
+		const nojs = root.querySelector<HTMLElement>('.sr-map__note--nojs');
+		const status = root.querySelector<HTMLElement>('.sr-map__note--status');
+		const templates = [...root.querySelectorAll<HTMLTemplateElement>('.sr-map__popups template')];
+		const pins = readPins(root);
+
+		// From here the map is this element's job, so swap the no-JS sentence
+		// for a loading one before Leaflet starts asking for tiles.
+		nojs?.setAttribute('hidden', '');
+		status?.removeAttribute('hidden');
+		root.dataset.state = 'loading';
+
+		const map = L.map(canvas, {
+			zoomControl: false,
+			scrollWheelZoom: true, // this page's whole purpose (§6.5)
+			minZoom: 5,
+			maxZoom: 17,
+			zoomAnimation: !reduceMotion,
+			fadeAnimation: !reduceMotion,
+			markerZoomAnimation: !reduceMotion,
+		});
+
+		map.attributionControl.setPrefix(false);
+
+		L.control
+			.zoom({ position: 'topleft', zoomInTitle: 'Aproximar', zoomOutTitle: 'Afastar' })
+			.addTo(map);
+
+		const tiles = L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+
+		// Initial view. One pin is the launch state and has to look deliberate:
+		// fitBounds on a single point snaps to maximum zoom, which reads as a
+		// bug, so a single pin gets a regional view with its surroundings.
+		if (pins.length === 0) {
+			map.setView([39.6, -8.0], 6); // mainland Portugal
+		} else if (pins.length === 1) {
+			const only = pins[0]!;
+			map.setView([only.lat, only.lng], 10);
+		} else {
+			map.fitBounds(
+				L.latLngBounds(pins.map((pin) => [pin.lat, pin.lng] as [number, number])),
+				{ padding: [40, 40], maxZoom: 12 },
+			);
+		}
+
+		// Keep panning near the rides rather than out over the empty Atlantic,
+		// with enough slack that a ride abroad would still fit.
+		if (pins.length > 0) {
+			const lats = pins.map((pin) => pin.lat);
+			const lngs = pins.map((pin) => pin.lng);
+			map.setMaxBounds([
+				[Math.max(-85, Math.min(...lats) - 6), Math.max(-180, Math.min(...lngs) - 8)],
+				[Math.min(85, Math.max(...lats) + 6), Math.min(180, Math.max(...lngs) + 8)],
+			]);
+		}
+
+		const icon = L.divIcon({
+			className: 'sr-pin',
+			html: '<span class="sr-pin__dot"></span>',
+			iconSize: [18, 18],
+			iconAnchor: [9, 9],
+			popupAnchor: [0, -12],
+		});
+
+		pins.forEach((pin, index) => {
+			const marker = L.marker([pin.lat, pin.lng], {
+				icon,
+				title: pin.name,
+				keyboard: true, // tabbable, Esc closes the popup
+				riseOnHover: true,
+			}).addTo(map);
+
+			const element = marker.getElement();
+			// Leaflet gives a divIcon marker role="button" and the title as its
+			// only name; say what the button is in Portuguese instead.
+			element?.setAttribute('aria-label', `Local: ${pin.name}`);
+
+			const template = templates[index];
+			if (template) {
+				marker.bindPopup(template.innerHTML, {
+					// Width belongs to the options, not the stylesheet (§5.4).
+					maxWidth: 260,
+					minWidth: 240,
+					autoPanPadding: [24, 24],
+					className: 'sr-popup',
+				});
+			}
+		});
+
+		map.on('popupopen', (event) => {
+			const marker = event.popup.options.autoClose === undefined ? null : null;
+			void marker;
+			const source = (event.popup as unknown as { _source?: L.Marker })._source;
+			source?.getElement()?.classList.add('is-open');
+
+			const close = event.popup.getElement()?.querySelector('.leaflet-popup-close-button');
+			// Leaflet hard-codes an English aria-label on the close button.
+			close?.setAttribute('aria-label', 'Fechar');
+			close?.setAttribute('title', 'Fechar');
+		});
+
+		map.on('popupclose', (event) => {
+			const source = (event.popup as unknown as { _source?: L.Marker })._source;
+			source?.getElement()?.classList.remove('is-open');
+		});
+
+		// Loading state, resolved by the tiles rather than by a timer: the map
+		// is "ready" when something is actually drawn on it.
+		let painted = false;
+		const ready = () => {
+			painted = true;
+			root.dataset.state = 'ready';
+			status?.setAttribute('hidden', '');
+		};
+		const failed = () => {
+			if (painted) return;
+			root.dataset.state = 'error';
+			if (status) {
+				status.textContent = 'Não foi possível carregar o mapa. A lista de locais está aqui em baixo.';
+				status.removeAttribute('hidden');
+			}
+		};
+
+		tiles.once('tileload', ready);
+		tiles.once('tileerror', () => window.setTimeout(failed, 4000));
+		window.setTimeout(() => (painted ? undefined : failed()), 12000);
+
+		// A container that changes size after init (fonts landing, an address
+		// bar collapsing) otherwise leaves grey gaps where tiles should be.
+		let first = true;
+		new ResizeObserver(() => {
+			if (first) {
+				first = false;
+				return;
+			}
+			map.invalidateSize({ animate: false });
+		}).observe(canvas);
+	}
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sr-ridemap]')) {
+		build(root);
+	}
+</script>

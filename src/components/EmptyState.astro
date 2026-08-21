@@ -1,0 +1,31 @@
+---
+/**
+ * Empty state (design-system §5.8).
+ *
+ * A dashed panel with a written Portuguese sentence — never a spinner and
+ * never a grey skeleton. This is a *finished* state, not a loading one.
+ */
+interface Props {
+	title: string;
+	actionHref?: string;
+	actionLabel?: string;
+	headingLevel?: 2 | 3;
+}
+
+const { title, actionHref, actionLabel, headingLevel = 2 } = Astro.props;
+const Heading = `h${headingLevel}` as 'h2' | 'h3';
+---
+
+<div class="empty">
+	<Heading class="empty__title">{title}</Heading>
+	<p class="empty__body"><slot /></p>
+	{
+		actionHref && actionLabel && (
+			<p>
+				<a class="btn btn--ghost" href={actionHref}>
+					{actionLabel}
+				</a>
+			</p>
+		)
+	}
+</div>

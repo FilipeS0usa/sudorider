@@ -1,0 +1,47 @@
+---
+/**
+ * Gear item (design-system §5.3).
+ *
+ * Gear is a reference list, not a shop: no prices, no buy links, no star
+ * ratings. The value is what he actually uses and why. The category is a
+ * heading one level up, not a badge on the card.
+ */
+interface Props {
+	name: string;
+	note: string;
+	url?: string;
+}
+
+const { name, note, url } = Astro.props;
+---
+
+<article class="g-item">
+	<h3 class="g-item__name">
+		{url ? <a href={url} rel="noopener">{name}</a> : name}
+	</h3>
+	<p class="g-item__why">{note}</p>
+</article>
+
+<style>
+	.g-item {
+		display: flex;
+		flex-direction: column;
+		gap: var(--sr-space-2);
+		padding: var(--sr-space-4);
+		background: var(--sr-bg-surface);
+		border: 1px solid var(--sr-border);
+		border-radius: var(--sr-radius-md);
+		box-shadow: var(--sr-shadow);
+	}
+
+	.g-item__name {
+		font-size: var(--sr-text-md);
+		font-weight: 600;
+	}
+
+	.g-item__why {
+		font-size: var(--sr-text-sm);
+		line-height: var(--sr-leading-relaxed);
+		color: var(--sr-fg-muted);
+	}
+</style>

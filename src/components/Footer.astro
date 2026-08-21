@@ -1,0 +1,154 @@
+---
+/**
+ * Site footer (design-system §5.6). Three columns at --bp-md, stacked below.
+ *
+ * The licence line is not boilerplate: this repository is deliberately
+ * dual-licensed, MIT for the code and CC BY-SA 4.0 for the content, and the
+ * site is the public face of that.
+ */
+import { withBase } from '../lib/url';
+import { SITE } from './site';
+import Icon from './Icon.astro';
+
+const nav = [
+	{ href: '/', label: 'Início' },
+	{ href: '/videos', label: 'Vídeos' },
+	{ href: '/mapa', label: 'Mapa' },
+	{ href: '/rotas', label: 'Rotas' },
+	{ href: '/equipamento', label: 'Equipamento' },
+	{ href: '/sobre', label: 'Sobre' },
+	{ href: '/contacto', label: 'Contacto' },
+];
+
+const ano = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+	<div class="container site-footer__inner">
+		<div class="site-footer__brand">
+			<span class="wordmark"><span class="wordmark__sudo">sudo</span>rider</span>
+			<p class="site-footer__tagline">{SITE.tagline}</p>
+		</div>
+
+		<nav class="site-footer__col" aria-label="Rodapé">
+			<h2 class="site-footer__heading">Navegação</h2>
+			<ul class="site-footer__links">
+				{
+					nav.map((link) => (
+						<li>
+							<a class="u-plain site-footer__link" href={withBase(link.href)}>
+								{link.label}
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</nav>
+
+		<div class="site-footer__col">
+			<h2 class="site-footer__heading">Segue</h2>
+			<ul class="site-footer__links site-footer__links--single">
+				<li>
+					<a class="u-plain site-footer__link site-footer__link--icon" href={SITE.youtube} rel="me noopener">
+						<Icon name="youtube" size={18} />
+						YouTube
+					</a>
+				</li>
+				<li>
+					<a class="u-plain site-footer__link site-footer__link--icon" href={`mailto:${SITE.email}`}>
+						<Icon name="email" size={18} />
+						<span class="site-footer__email">{SITE.email}</span>
+					</a>
+				</li>
+			</ul>
+		</div>
+	</div>
+
+	<div class="container">
+		<p class="site-footer__legal">
+			© {ano} SudoRider · Código <a href="https://opensource.org/license/mit">MIT</a> · Conteúdo{' '}
+			<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt">CC BY-SA 4.0</a>
+		</p>
+	</div>
+</footer>
+
+<style>
+	.site-footer {
+		margin-block-start: var(--space-section);
+		padding-block: var(--sr-space-16) var(--sr-space-6);
+		border-block-start: 1px solid var(--sr-border);
+		background: var(--sr-bg-surface);
+	}
+
+	.site-footer__inner {
+		display: grid;
+		gap: var(--sr-space-12) var(--sr-space-8);
+	}
+
+	.site-footer__brand .wordmark {
+		font-size: var(--sr-text-lg);
+	}
+
+	.site-footer__tagline {
+		margin-block-start: var(--sr-space-2);
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+	}
+
+	.site-footer__heading {
+		font-size: var(--sr-text-xs);
+		font-weight: 600;
+		letter-spacing: var(--sr-tracking-wide);
+		text-transform: uppercase;
+		color: var(--sr-fg-muted);
+		margin-block-end: var(--sr-space-4);
+	}
+
+	.site-footer__links {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0 var(--sr-space-4);
+		list-style: none;
+		margin: 0;
+	}
+
+	.site-footer__links--single {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.site-footer__link {
+		display: flex;
+		align-items: center;
+		gap: var(--sr-space-2);
+		min-height: 2.75rem;
+		font-size: var(--sr-text-sm);
+	}
+
+	.site-footer__link:hover {
+		color: var(--sr-accent-text);
+		text-decoration: underline;
+		text-decoration-color: var(--sr-accent);
+		text-decoration-thickness: 0.08em;
+		text-underline-offset: 0.16em;
+		text-decoration-skip-ink: none;
+	}
+
+	.site-footer__email {
+		overflow-wrap: anywhere;
+	}
+
+	.site-footer__legal {
+		margin-block-start: var(--sr-space-12);
+		padding-block-start: var(--sr-space-6);
+		border-block-start: 1px solid var(--sr-border);
+		font-size: var(--sr-text-xs);
+		color: var(--sr-fg-muted);
+	}
+
+	@media (min-width: 52rem) {
+		/* --bp-md */
+		.site-footer__inner {
+			grid-template-columns: 1.5fr 1fr 1fr;
+		}
+	}
+</style>

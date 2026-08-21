@@ -1,0 +1,202 @@
+---
+/**
+ * Site header — wordmark plus the seven nav links (design-system §4).
+ *
+ * One list in the DOM, restyled at the breakpoint. Mobile uses a native
+ * <details> disclosure: the browser supplies the expanded/collapsed state to
+ * assistive tech itself, and keyboard operation is free. Deliberately no
+ * role="button", aria-expanded or aria-controls on the <summary> — they fight
+ * the native semantics.
+ */
+import { withBase } from '../lib/url';
+
+const links = [
+	{ href: '/', label: 'Início' },
+	{ href: '/videos', label: 'Vídeos' },
+	{ href: '/mapa', label: 'Mapa' },
+	{ href: '/rotas', label: 'Rotas' },
+	{ href: '/equipamento', label: 'Equipamento' },
+	{ href: '/sobre', label: 'Sobre' },
+	{ href: '/contacto', label: 'Contacto' },
+];
+
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+const here = Astro.url.pathname.slice(base.length).replace(/\/+$/, '') || '/';
+
+/** `/rotas/evora-monsaraz` marks `Rotas` as the current section. */
+function isCurrent(href: string): boolean {
+	return href === '/' ? here === '/' : here === href || here.startsWith(`${href}/`);
+}
+---
+
+<header class="site-header">
+	<div class="container site-header__inner">
+		<a class="site-header__brand u-plain" href={withBase('/')}>
+			<span class="wordmark"><span class="wordmark__sudo">sudo</span>rider</span>
+		</a>
+
+		<nav aria-label="Principal">
+			<details class="nav">
+				<summary class="nav__toggle">
+					Menu<span class="nav__chevron" aria-hidden="true"></span>
+				</summary>
+				<ul class="nav__list">
+					{
+						links.map((link) => (
+							<li class="nav__item">
+								<a
+									class="nav__link u-plain"
+									href={withBase(link.href)}
+									aria-current={isCurrent(link.href) ? 'page' : undefined}
+								>
+									{link.label}
+								</a>
+							</li>
+						))
+					}
+				</ul>
+			</details>
+		</nav>
+	</div>
+</header>
+
+<style>
+	.site-header {
+		position: relative;
+		z-index: var(--z-header);
+		border-block-end: 1px solid var(--sr-border);
+		background: var(--sr-bg);
+	}
+
+	.site-header__inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--sr-space-4);
+		min-height: var(--header-h);
+	}
+
+	.site-header__brand {
+		font-size: var(--sr-text-lg);
+		/* Clear space equal to the wordmark's x-height on every side. */
+		padding-block: var(--sr-space-2);
+		padding-inline-end: var(--sr-space-2);
+	}
+
+	/* --- The disclosure toggle (mobile only) ------------------------------ */
+
+	.nav__toggle {
+		display: flex;
+		align-items: center;
+		gap: var(--sr-space-2);
+		min-height: 2.75rem;
+		padding-inline: var(--sr-space-3);
+		/* Extend the hit area to the header's right gutter edge. */
+		margin-inline-end: calc(var(--gutter) * -1);
+		padding-inline-end: var(--gutter);
+		font-size: var(--sr-text-md);
+		font-weight: 600;
+		cursor: pointer;
+		list-style: none;
+	}
+
+	.nav__toggle::-webkit-details-marker {
+		display: none;
+	}
+
+	.nav__chevron {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-inline-end: 2px solid currentColor;
+		border-block-end: 2px solid currentColor;
+		transform: translateY(-0.15em) rotate(45deg);
+		transition: transform var(--dur-1) var(--ease-out);
+	}
+
+	.nav[open] .nav__chevron {
+		transform: translateY(0.1em) rotate(225deg);
+	}
+
+	/* --- The panel -------------------------------------------------------- */
+
+	.nav__list {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-start: 100%;
+		/* Must clear Leaflet, which assigns itself z-indexes up to 1000. */
+		z-index: var(--z-nav-panel);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		background: var(--sr-bg-surface);
+		border-block: 1px solid var(--sr-border);
+		box-shadow: var(--sr-shadow);
+	}
+
+	.nav__item + .nav__item {
+		border-block-start: 1px solid var(--sr-border);
+	}
+
+	.nav__link {
+		display: flex;
+		align-items: center;
+		min-height: 2.75rem;
+		padding: var(--sr-space-3) var(--gutter);
+		font-size: var(--sr-text-md);
+		font-weight: 400;
+		/* "Equipamento" wrapping to two lines is the single most likely visual
+		   failure in this header. */
+		white-space: nowrap;
+	}
+
+	.nav__link:hover {
+		color: var(--sr-accent-text);
+	}
+
+	.nav__link[aria-current='page'] {
+		font-weight: 600;
+		box-shadow: inset 3px 0 0 var(--sr-accent);
+	}
+
+	/* --- Desktop: neutralise the disclosure rather than duplicating it ----- */
+
+	@media (min-width: 52rem) {
+		/* --bp-md */
+		.nav {
+			/* details/summary stop generating boxes; one list serves both layouts. */
+			display: contents;
+		}
+
+		.nav__toggle {
+			display: none;
+		}
+
+		.nav__list {
+			position: static;
+			display: flex;
+			gap: 1.75rem;
+			background: none;
+			border: 0;
+			box-shadow: none;
+		}
+
+		.nav__item + .nav__item {
+			border: 0;
+		}
+
+		.nav__link {
+			min-height: auto;
+			padding: var(--sr-space-2) 0;
+			font-size: var(--sr-text-sm);
+			/* 400/600 only — the brand ships no 500 weight. */
+			font-weight: 400;
+		}
+
+		.nav__link[aria-current='page'] {
+			font-weight: 600;
+			/* The same 0.08em ochre rule as the wordmark's underscore, drawn
+			   with a shadow so it costs no layout. */
+			box-shadow: inset 0 -2px 0 var(--sr-accent);
+		}
+	}
+</style>

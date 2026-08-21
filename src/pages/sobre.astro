@@ -1,0 +1,69 @@
+---
+/**
+ * Sobre (design-system §6.3).
+ *
+ * Single prose column, left-aligned within the container — not centred on the
+ * page at desktop, which would leave the h1 floating in the middle of 1088px.
+ *
+ * PLACEHOLDER COPY: the paragraphs below are built only from what is already
+ * public (Évora, Lisboa, the CFMOTO 450 MT, ~14.000 km, the tagline and
+ * Filipe's own channel description). Nothing about the job, the first bike,
+ * the camera kit or the plans is invented. Filipe should rewrite this page in
+ * his own words — the structure is here for him to fill.
+ */
+import Page from '../layouts/Page.astro';
+import { withBase } from '../lib/url';
+import { SITE } from '../components/site';
+---
+
+<Page
+	title="Sobre"
+	description="Quem conduz, o que conduz, e porquê — o Filipe, a Dora e o canal SudoRider."
+	lead="Quem conduz, o que conduz, e porquê."
+>
+	<div class="prose">
+		<p>
+			Sou o Filipe. Nasci em Évora, vivo em Lisboa e ando numa CFMOTO 450 MT a que chamo a
+			Dora. O SudoRider é o sítio onde ponho o que trago da estrada.
+		</p>
+
+		<h2>A Dora</h2>
+		<p>
+			A Dora é uma CFMOTO 450 MT. Passei mais de um ano e cerca de 14.000 km em cima dela
+			antes de filmar seja o que for — tempo suficiente para saber o que ela aguenta e onde
+			me leva.
+		</p>
+
+		<h2>Porquê um canal</h2>
+		<p>
+			Ainda sem formato fixo: passeios, viagens, uma ou outra escapadela de campismo. Nascido
+			em Évora, a viver em Lisboa, sempre à procura do próximo motivo para arrancar.
+		</p>
+
+		{/* The one place the tech-versus-road tension is stated outright, and
+		    it is stated in his own words. Do not add a second line explaining
+		    the name — docs/brand.md §3 and §4, principle 7. */}
+		<blockquote class="pull-quote">
+			<p>{SITE.tagline}</p>
+		</blockquote>
+
+		<div class="btn-row">
+			<a class="btn btn--ghost" href={withBase('/videos')}>Ver os vídeos</a>
+			<a class="btn btn--ghost" href={withBase('/contacto')}>Falar comigo</a>
+		</div>
+	</div>
+</Page>
+
+<style>
+	.pull-quote {
+		--flow-space: var(--sr-space-12);
+		padding-inline-start: var(--sr-space-6);
+		border-inline-start: 3px solid var(--sr-accent);
+		font-size: var(--sr-text-lg);
+		line-height: var(--sr-leading-snug);
+	}
+
+	.btn-row {
+		--flow-space: var(--sr-space-12);
+	}
+</style>

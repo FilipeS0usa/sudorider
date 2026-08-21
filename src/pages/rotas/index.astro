@@ -1,0 +1,58 @@
+---
+/**
+ * Rotas — index (design-system §6.6).
+ *
+ * At zero routes this is the page header and the empty panel, and that is the
+ * whole page. It ships, it is linked in the nav, and it says what will appear.
+ * Short, honest, and it reads as intentional rather than unfinished.
+ */
+import { getCollection } from 'astro:content';
+import Page from '../../layouts/Page.astro';
+import RouteCard from '../../components/RouteCard.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import { withBase } from '../../lib/url';
+
+const rotas = (await getCollection('rotas', ({ data }) => !data.draft)).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+
+const contagem = rotas.length === 1 ? '1 rota' : `${rotas.length} rotas`;
+const grelha = rotas.length >= 4;
+---
+
+<Page
+	title="Rotas"
+	description="Rotas de mota em Portugal, com traçado, distância e notas do caminho."
+	lead="Percursos que já fiz, com o traçado, a distância e as notas do caminho."
+	count={rotas.length > 0 ? contagem : undefined}
+>
+	{
+		rotas.length === 0 ? (
+			<EmptyState
+				title="Ainda não há rotas por aqui."
+				actionHref={withBase('/mapa')}
+				actionLabel="Ver o mapa"
+			>
+				As rotas vão aparecer à medida que as for escrevendo — com o traçado, a distância e as
+				notas do caminho. Entretanto, o mapa já mostra por onde andei.
+			</EmptyState>
+		) : (
+			<div
+				class={grelha ? 'cards cards--rotas' : 'stack'}
+				data-count={grelha ? Math.min(rotas.length, 5) : undefined}
+			>
+				{rotas.map((rota) => (
+					<RouteCard
+						slug={rota.id}
+						title={rota.data.title}
+						region={rota.data.region}
+						distanceKm={rota.data.distanceKm}
+						date={rota.data.date}
+						summary={rota.data.summary}
+						headingLevel={2}
+					/>
+				))}
+			</div>
+		)
+	}
+</Page>

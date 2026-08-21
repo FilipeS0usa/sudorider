@@ -1,31 +1,207 @@
 ---
 /**
- * STUB — the Web GIS Developer replaces this with the real GPX track renderer.
+ * One GPX track on an interactive map.
  *
- * Contract (do not change without updating both sides):
  *   <RouteMap gpx="nome-da-rota.gpx" height="320px" />
  *
- * Renders one GPX track from public/gpx/. Track uses --sr-map-track (ink with
- * a casing), NOT the accent — the accent belongs to pins.
+ * The GPX is read and parsed at BUILD time and the coordinates are baked into
+ * a data attribute, so the browser never fetches the track file. Same split as
+ * RideMap: nothing above the fence touches Leaflet, and the <script> below is
+ * bundled as a browser module that the static build never executes.
+ *
+ * The track is drawn in --sr-map-track (ink) over --sr-map-track-casing, NOT
+ * in the accent: the accent belongs to pins, and a track competing with a pin
+ * is the thing docs/brand.md §5 specifically rules out.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { parseGpx, simplifyTrack, decimate, trackLengthKm } from '../lib/gpx';
+
+import 'leaflet/dist/leaflet.css';
+
 interface Props {
 	gpx: string;
 	height?: string;
 }
+
 const { gpx, height = '320px' } = Astro.props;
+
+const CSS_LENGTH = /^[\w%.\s()+*/,-]+$/;
+const mapHeight = CSS_LENGTH.test(height) ? height : '320px';
+
+/**
+ * Frontmatter is authored by hand, so treat the filename as untrusted: take the
+ * basename only. Without this, `gpx: "../../../etc/passwd"` reads outside
+ * public/gpx at build time.
+ */
+const safeName = gpx.replace(/^.*[\\/]/, '');
+
+let segments: number[][][] = [];
+let distanceKm = 0;
+let problem: string | null = null;
+
+if (!safeName.endsWith('.gpx')) {
+	problem = 'Ficheiro de traçado inválido.';
+} else {
+	try {
+		const xml = readFileSync(resolve(process.cwd(), 'public/gpx', safeName), 'utf8');
+		const track = parseGpx(xml);
+
+		if (track.segments.length === 0) {
+			problem = 'O traçado está vazio.';
+		} else {
+			// Simplify at build time: a raw GPX can carry tens of thousands of
+			// points, and past a few hundred the polyline costs payload without
+			// changing a single rendered pixel.
+			segments = track.segments
+				.map((segment) => decimate(simplifyTrack(segment, 10), 600))
+				.filter((segment) => segment.length >= 2)
+				.map((segment) => segment.map((p) => [p.lat, p.lon]));
+
+			distanceKm = trackLengthKm(track.segments);
+			if (segments.length === 0) problem = 'O traçado está vazio.';
+		}
+	} catch {
+		// A missing track must not take the whole build down — the page still
+		// has its prose. Say so plainly instead.
+		problem = 'Traçado indisponível.';
+	}
+}
+
+const pointCount = segments.reduce((n, s) => n + s.length, 0);
 ---
 
-<div class="routemap-stub" style={`min-height:${height}`} data-gpx={gpx}>
-	<p>Traçado: {gpx}</p>
-</div>
+{
+	problem ? (
+		<p class="routemap-problem">{problem}</p>
+	) : (
+		<div
+			class="sr-routemap"
+			style={`--routemap-h:${mapHeight}`}
+			data-track={JSON.stringify(segments)}
+			data-distance={distanceKm.toFixed(1)}
+			role="img"
+			aria-label={`Traçado da rota, ${distanceKm.toFixed(0)} quilómetros, em ${pointCount} pontos.`}
+		/>
+	)
+}
 
 <style>
-	.routemap-stub {
-		display: grid;
-		place-items: center;
+	.sr-routemap {
+		block-size: var(--routemap-h, 320px);
+		border: 1px solid var(--sr-border);
+		border-radius: var(--sr-radius-lg);
 		background: var(--sr-bg-well);
+		overflow: hidden;
+	}
+
+	.routemap-problem {
+		padding: var(--sr-space-4);
 		border: 1px dashed var(--sr-border-strong);
 		border-radius: var(--sr-radius-lg);
+		background: var(--sr-bg-well);
 		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-sm);
+	}
+
+	.sr-routemap :global(.leaflet-container) {
+		block-size: 100%;
+		background: var(--sr-bg-well);
+		font: inherit;
+	}
+
+	/* Tile treatment copied from RideMap so the two maps read as one map.
+	   Light: slight desaturation. Dark: invert + hue-rotate flips tiles to a
+	   dark base while keeping hues roughly in place. It applies to the tile
+	   pane alone, so the track, its casing and the attribution keep their
+	   real colours. */
+	.sr-routemap {
+		--sr-map-tiles: saturate(0.85);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:global(:root:not([data-theme='light'])) .sr-routemap {
+			--sr-map-tiles: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.9) saturate(0.75);
+		}
+	}
+
+	:global(:root[data-theme='dark']) .sr-routemap {
+		--sr-map-tiles: invert(1) hue-rotate(180deg) brightness(0.88) contrast(0.9) saturate(0.75);
+	}
+
+	.sr-routemap :global(.leaflet-tile-pane) {
+		filter: var(--sr-map-tiles);
+	}
+
+	.sr-routemap :global(.leaflet-control-attribution) {
+		background: var(--sr-bg-surface);
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-2xs);
+	}
+
+	.sr-routemap :global(.leaflet-control-attribution a) {
+		color: var(--sr-accent-text);
+	}
+
+	.sr-routemap :global(.leaflet-container:focus-visible) {
+		outline: 2px solid var(--sr-focus);
+		outline-offset: -2px;
 	}
 </style>
+
+<script>
+	import * as L from 'leaflet';
+
+	const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+	const ATTRIBUTION =
+		'&copy; colaboradores do <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+	const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	function readTrack(root: HTMLElement): [number, number][][] {
+		try {
+			const parsed: unknown = JSON.parse(root.dataset.track ?? '[]');
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter(Array.isArray) as [number, number][][];
+		} catch {
+			return [];
+		}
+	}
+
+	function styleOf(name: string, fallback: string): string {
+		return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+	}
+
+	function build(root: HTMLElement) {
+		const segments = readTrack(root);
+		if (segments.length === 0) return;
+
+		const map = L.map(root, {
+			scrollWheelZoom: false, // never hijack the page scroll on a prose page
+			zoomAnimation: !reduceMotion,
+			fadeAnimation: !reduceMotion,
+			attributionControl: true,
+		});
+
+		L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(map);
+
+		const casing = styleOf('--sr-map-track-casing', 'rgba(255,255,255,.75)');
+		const ink = styleOf('--sr-map-track', '#1B1A18');
+
+		const lines: L.Polyline[] = [];
+		for (const segment of segments) {
+			// Casing first, track over it: a light halo keeps an ink line legible
+			// against dark tiles without the line itself changing colour.
+			L.polyline(segment, { color: casing, weight: 7, opacity: 1, lineCap: 'round' }).addTo(map);
+			lines.push(L.polyline(segment, { color: ink, weight: 3, opacity: 1, lineCap: 'round' }).addTo(map));
+		}
+
+		const group = L.featureGroup(lines);
+		map.fitBounds(group.getBounds(), { padding: [24, 24] });
+
+		// Keyboard users need to reach the map, but it must not be a tab trap.
+		root.setAttribute('tabindex', '0');
+	}
+
+	document.querySelectorAll<HTMLElement>('.sr-routemap').forEach(build);
+</script>

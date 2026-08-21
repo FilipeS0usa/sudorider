@@ -1,0 +1,99 @@
+---
+/**
+ * Equipamento (design-system §6.4).
+ *
+ * Categories are headings, not badges: it gives screen-reader users a
+ * navigable outline and removes the need for filter UI. A category with no
+ * items is omitted, not shown empty — two items under "Suportes" reads as
+ * complete in a way a sparse full-page grid never does.
+ *
+ * `src/data/equipamento.json` is `[]` today, so what ships is the empty panel.
+ */
+import Page from '../layouts/Page.astro';
+import GearItem from '../components/GearItem.astro';
+import EmptyState from '../components/EmptyState.astro';
+import { withBase } from '../lib/url';
+import type { Equipamento } from '../lib/types';
+import equipamentoData from '../data/equipamento.json';
+
+const equipamento = equipamentoData as Equipamento[];
+
+/** Fixed display order. Data may use the singular; the heading is plural. */
+const CATEGORIAS = [
+	{ heading: 'Câmaras', matches: ['camara', 'camaras'] },
+	{ heading: 'Suportes', matches: ['suporte', 'suportes'] },
+	{ heading: 'Capacete', matches: ['capacete', 'capacetes'] },
+	{ heading: 'Comunicação', matches: ['comunicacao', 'comunicacoes'] },
+	{ heading: 'Bagagem', matches: ['bagagem', 'bagagens'] },
+];
+
+const normalise = (value: string) =>
+	value
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.toLowerCase()
+		.trim();
+
+const usados = new Set<Equipamento>();
+
+const grupos = CATEGORIAS.map((categoria) => {
+	const itens = equipamento.filter((item) => categoria.matches.includes(normalise(item.category)));
+	itens.forEach((item) => usados.add(item));
+	return { heading: categoria.heading, itens };
+}).filter((grupo) => grupo.itens.length > 0);
+
+/** Anything with a category outside the fixed list still gets a home. */
+const restantes = equipamento.filter((item) => !usados.has(item));
+const outrosGrupos = [...new Set(restantes.map((item) => item.category))].map((category) => ({
+	heading: category,
+	itens: restantes.filter((item) => item.category === category),
+}));
+
+const todos = [...grupos, ...outrosGrupos];
+---
+
+<Page
+	title="Equipamento"
+	description="O que o Filipe leva na CFMOTO 450 MT e porquê. Sem patrocínios."
+	lead="O que levo comigo e porquê. Sem patrocínios."
+>
+	{
+		todos.length === 0 ? (
+			<EmptyState
+				title="Ainda não há equipamento listado."
+				actionHref={withBase('/videos')}
+				actionLabel="Ver os vídeos"
+			>
+				Falta escrever esta parte. Vai aparecer aqui o que levo comigo — câmaras, suportes,
+				capacete, intercomunicador e bagagem — e a razão de cada escolha. Nada aqui é
+				patrocinado. É só o que levo comigo.
+			</EmptyState>
+		) : (
+			<div class="gear-groups">
+				{todos.map((grupo) => (
+					<section class="gear-group">
+						<h2 class="gear-group__heading">{grupo.heading}</h2>
+						<div class="cards cards--gear">
+							{grupo.itens.map((item) => (
+								<GearItem name={item.name} note={item.note} url={item.url} />
+							))}
+						</div>
+					</section>
+				))}
+			</div>
+		)
+	}
+</Page>
+
+<style>
+	.gear-groups {
+		display: grid;
+		gap: var(--sr-space-16);
+	}
+
+	.gear-group__heading {
+		margin-block-end: var(--sr-space-6);
+		padding-block-end: var(--sr-space-3);
+		border-block-end: 1px solid var(--sr-border);
+	}
+</style>

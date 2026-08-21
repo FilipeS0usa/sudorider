@@ -1,0 +1,101 @@
+---
+/**
+ * Route card (design-system §5.2).
+ *
+ * Distance and region are the reason someone clicks, so they outrank the
+ * prose. The whole card is clickable via a stretched pseudo-element while only
+ * the title sits in the accessibility tree.
+ *
+ * The GPX track sketch specified in §5.2 needs a build-time GPX → SVG polyline
+ * helper, which belongs to the Web GIS pass (`src/lib/gpx.ts`, handoff §11.6).
+ * Until it exists this renders the sanctioned fallback: no sketch at all, meta
+ * row promoted. Explicitly *not* a grey placeholder box.
+ */
+import { withBase } from '../lib/url';
+import { mesAno, dataISO } from './format';
+
+interface Props {
+	slug: string;
+	title: string;
+	region: string;
+	distanceKm: number;
+	date: Date;
+	summary: string;
+	headingLevel?: 2 | 3;
+}
+
+const { slug, title, region, distanceKm, date, summary, headingLevel = 2 } = Astro.props;
+const Heading = `h${headingLevel}` as 'h2' | 'h3';
+---
+
+<article class="r-card">
+	<Heading class="r-card__title">
+		<a class="r-card__link u-plain" href={withBase(`/rotas/${slug}`)}>{title}</a>
+	</Heading>
+
+	<p class="r-card__meta">
+		<span class="tag">{region}</span>
+		<span class="r-card__num u-mono">{distanceKm} km</span>
+		<time class="u-mono" datetime={dataISO(date)}>{mesAno(date)}</time>
+	</p>
+
+	<p class="r-card__excerpt">{summary}</p>
+</article>
+
+<style>
+	.r-card {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: var(--sr-space-3);
+		padding: var(--sr-space-4);
+		background: var(--sr-bg-surface);
+		border: 1px solid var(--sr-border);
+		border-radius: var(--sr-radius-md);
+		box-shadow: var(--sr-shadow);
+		transition: border-color var(--dur-1) var(--ease-out);
+	}
+
+	.r-card:hover,
+	.r-card:focus-within {
+		border-color: var(--sr-border-strong);
+	}
+
+	.r-card__title {
+		font-size: var(--sr-text-xl);
+		text-wrap: pretty;
+	}
+
+	.r-card__link::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+	}
+
+	/* Above the stretched overlay, so the text stays selectable. */
+	.r-card__meta,
+	.r-card__excerpt {
+		position: relative;
+	}
+
+	.r-card__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--sr-space-2) var(--sr-space-4);
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+	}
+
+	.r-card__num {
+		font-size: var(--sr-text-md);
+		color: var(--sr-fg);
+	}
+
+	.r-card__excerpt {
+		font-size: var(--sr-text-sm);
+		line-height: var(--sr-leading-relaxed);
+		color: var(--sr-fg-muted);
+	}
+</style>

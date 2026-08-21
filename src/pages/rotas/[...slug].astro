@@ -1,0 +1,122 @@
+---
+/**
+ * A single route write-up (design-system §6.6).
+ *
+ * Prose plus the track. The GPX is parsed at build time by RouteMap, and the
+ * same file is offered as a download so the route can actually be ridden —
+ * publishing the track is the point of this section, not decoration.
+ */
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import RouteMap from '../../components/RouteMap.astro';
+import { withBase } from '../../lib/url';
+import { dataLonga, dataISO } from '../../components/format';
+
+export async function getStaticPaths() {
+	const rotas = await getCollection('rotas', ({ data }) => !data.draft);
+	return rotas.map((rota) => ({ params: { slug: rota.id }, props: { rota } }));
+}
+
+const { rota } = Astro.props;
+const { Content } = await render(rota);
+const d = rota.data;
+
+const videoUrl = d.video ? `https://www.youtube.com/watch?v=${d.video}` : null;
+---
+
+<Base title={d.title} description={d.summary}>
+	<article class="container rota">
+		<header class="rota__cabecalho">
+			<p class="rota__regiao">{d.region}</p>
+			<h1>{d.title}</h1>
+			<p class="rota__resumo">{d.summary}</p>
+
+			<dl class="rota__factos">
+				<div>
+					<dt>Distância</dt>
+					<dd>{d.distanceKm.toFixed(0)} km</dd>
+				</div>
+				<div>
+					<dt>Data</dt>
+					<dd><time datetime={dataISO(d.date)}>{dataLonga(d.date)}</time></dd>
+				</div>
+			</dl>
+		</header>
+
+		<RouteMap gpx={d.gpx} height="360px" />
+
+		<div class="prose rota__texto">
+			<Content />
+		</div>
+
+		<footer class="rota__acoes">
+			<a class="btn btn--primary" href={withBase(`gpx/${d.gpx}`)} download>
+				Descarregar o traçado (GPX)
+			</a>
+			{videoUrl && <a class="btn" href={videoUrl}>Ver o vídeo desta rota</a>}
+			<a class="btn" href={withBase('rotas')}>Todas as rotas</a>
+		</footer>
+	</article>
+</Base>
+
+<style>
+	.rota {
+		padding-block: var(--sr-space-12) var(--sr-space-16);
+		display: grid;
+		gap: var(--sr-space-8);
+	}
+
+	.rota__cabecalho {
+		max-inline-size: var(--sr-measure);
+	}
+
+	.rota__regiao {
+		margin: 0 0 var(--sr-space-2);
+		font-size: var(--sr-text-2xs);
+		letter-spacing: var(--sr-tracking-wide);
+		text-transform: uppercase;
+		color: var(--sr-fg-muted);
+	}
+
+	.rota__resumo {
+		margin-block-start: var(--sr-space-3);
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-lg);
+		line-height: var(--sr-leading-snug);
+	}
+
+	.rota__factos {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--sr-space-8);
+		margin-block-start: var(--sr-space-6);
+		padding-block-start: var(--sr-space-4);
+		border-block-start: 1px solid var(--sr-border);
+	}
+
+	.rota__factos div {
+		display: grid;
+		gap: var(--sr-space-1);
+	}
+
+	.rota__factos dt {
+		font-size: var(--sr-text-2xs);
+		letter-spacing: var(--sr-tracking-wide);
+		text-transform: uppercase;
+		color: var(--sr-fg-muted);
+	}
+
+	.rota__factos dd {
+		margin: 0;
+		font-family: var(--sr-font-mono);
+		font-size: var(--sr-text-md);
+	}
+
+	.rota__acoes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--sr-space-3);
+		padding-block-start: var(--sr-space-6);
+		border-block-start: 1px solid var(--sr-border);
+	}
+</style>

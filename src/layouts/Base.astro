@@ -1,0 +1,75 @@
+---
+/**
+ * The page shell: head, skip link, header, <main>, footer.
+ *
+ * <main> gets no padding and no max-width of its own — each section inside it
+ * applies `.container` for itself. That is what lets /mapa go edge to edge by
+ * simply not adding the class, with no full-bleed margin hack and therefore no
+ * horizontal overflow when a classic scrollbar is present (design-system §3.1).
+ */
+import { withBase } from '../lib/url';
+import { SITE } from '../components/site';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+
+interface Props {
+	/** Page name, e.g. "Vídeos". Becomes "Vídeos · SudoRider". */
+	title: string;
+	description: string;
+	/** Replaces the whole <title>. Used by the homepage only. */
+	fullTitle?: string;
+}
+
+const { title, description, fullTitle } = Astro.props;
+const documentTitle = fullTitle ?? `${title} · ${SITE.name}`;
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="pt-PT">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+
+		<title>{documentTitle}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+
+		<link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
+		<link rel="icon" href={withBase('favicon.ico')} sizes="32x32" />
+
+		<meta name="theme-color" content="#FBFAF8" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#14161A" media="(prefers-color-scheme: dark)" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={SITE.name} />
+		<meta property="og:locale" content="pt_PT" />
+		<meta property="og:title" content={documentTitle} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta name="twitter:card" content="summary" />
+
+		{/* IBM Plex Sans 400/600 + IBM Plex Mono 400. Portuguese is covered by
+		    the `latin` subset alone — every diacritic the site needs lives in
+		    U+00C0–U+00FF, so no latin-ext request is ever made. */}
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;600&display=swap"
+		/>
+
+		<slot name="head" />
+	</head>
+
+	<body>
+		<a class="skip" href="#conteudo">Saltar para o conteúdo</a>
+		<Header />
+		<main id="conteudo" tabindex="-1">
+			<slot />
+		</main>
+		<Footer />
+	</body>
+</html>

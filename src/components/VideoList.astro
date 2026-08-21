@@ -1,0 +1,56 @@
+---
+/**
+ * Count-aware video layout (design-system §3.3).
+ *
+ * The grid is never used below four items. Two videos rendered as two large
+ * editorial rows read as *deliberate*; the same two in a three-column grid
+ * leave a third of every row blank and read as broken.
+ */
+import type { Video } from '../lib/types';
+import VideoCard from './VideoCard.astro';
+import EmptyState from './EmptyState.astro';
+
+interface Props {
+	videos: Video[];
+	headingLevel?: 2 | 3;
+	/** Render the empty panel when there is nothing to show. */
+	showEmpty?: boolean;
+}
+
+const { videos, headingLevel = 3, showEmpty = true } = Astro.props;
+const count = Math.min(videos.length, 5);
+const editorial = videos.length > 0 && videos.length <= 3;
+---
+
+{
+	videos.length === 0 && showEmpty && (
+		<EmptyState
+			title="Ainda não há vídeos publicados."
+			headingLevel={headingLevel}
+			actionHref="https://www.youtube.com/@SudoRider"
+			actionLabel="Ir ao canal"
+		>
+			O canal está mesmo a começar. O próximo vídeo aparece aqui assim que sair.
+		</EmptyState>
+	)
+}
+
+{
+	editorial && (
+		<div class="stack">
+			{videos.map((video) => (
+				<VideoCard video={video} variant="stack" headingLevel={headingLevel} />
+			))}
+		</div>
+	)
+}
+
+{
+	videos.length >= 4 && (
+		<div class="cards cards--videos" data-count={count}>
+			{videos.map((video) => (
+				<VideoCard video={video} variant="grid" headingLevel={headingLevel} />
+			))}
+		</div>
+	)
+}

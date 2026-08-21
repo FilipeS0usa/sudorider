@@ -1,0 +1,140 @@
+---
+/**
+ * Mapa (design-system §6.5).
+ *
+ * The one full-bleed page: <main> gets no .container, and the map fills the
+ * viewport below the header. `svh`, not `vh` — on iOS 100vh sits under the
+ * collapsing browser chrome and pushes the zoom controls off screen.
+ *
+ * The "Locais" list below the map is not a nicety. It is the only content on
+ * this page for readers without JS, it is the text alternative for a
+ * canvas-like widget (WCAG 1.1.1), and it makes the page crawlable. It is
+ * rendered always and visibly, never hidden behind <noscript>.
+ *
+ * The page title is a visually hidden h1: the layout has no room for a page
+ * header, but the document still needs exactly one top-level heading.
+ */
+import Base from '../layouts/Base.astro';
+import RideMap from '../components/RideMap.astro';
+import { dataCurta, dataISO, tituloLimpo } from '../components/format';
+import type { Local, Video } from '../lib/types';
+import locaisData from '../data/locais.json';
+import videosData from '../data/videos.json';
+
+const locais = locaisData as Local[];
+const videos = videosData as Video[];
+
+const pontos = locais.map((local) => {
+	const video = videos.find((item) => item.id === local.video);
+	return { local, video };
+});
+
+const nota =
+	locais.length === 1
+		? 'Por agora é só um ponto no mapa. Vão aparecendo à medida que os vídeos saem.'
+		: `De momento há poucos pontos no mapa — ${locais.length}. Vão aparecendo à medida que os vídeos saem.`;
+---
+
+<Base
+	title="Mapa"
+	description="O mapa das voltas do SudoRider. Cada pino é um sítio filmado e liga ao vídeo gravado ali."
+>
+	<h1 class="visually-hidden">Mapa</h1>
+
+	<RideMap locais={locais} height="max(26rem, calc(100svh - var(--header-h)))" />
+
+	<div class="container map-strip">
+		<p class="map-strip__lead">
+			Cada pino é uma volta filmada. Carrega num pino para ver o vídeo.
+		</p>
+
+		{locais.length < 3 && <p class="map-strip__note">{nota}</p>}
+
+		<h2 class="map-strip__heading">Locais</h2>
+
+		<ul class="locais">
+			{
+				pontos.map(({ local, video }) => (
+					<li class="local">
+						<h3 class="local__name">{local.name}</h3>
+						{video && (
+							<p class="local__meta">
+								<time class="u-mono" datetime={dataISO(video.published)}>
+									{dataCurta(video.published)}
+								</time>
+							</p>
+						)}
+						{local.note && <p class="local__note">{local.note}</p>}
+						{video ? (
+							<p>
+								<a href={video.url} rel="noopener">
+									{tituloLimpo(video.title)}
+								</a>
+							</p>
+						) : (
+							<p class="local__note">Sem vídeo associado.</p>
+						)}
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</Base>
+
+<style>
+	.map-strip {
+		padding-block: var(--sr-space-12) var(--sr-space-8);
+	}
+
+	.map-strip__lead {
+		max-width: var(--sr-measure);
+	}
+
+	.map-strip__note {
+		margin-block-start: var(--sr-space-3);
+		max-width: var(--sr-measure);
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+	}
+
+	.map-strip__heading {
+		margin-block-start: var(--sr-space-12);
+		padding-block-end: var(--sr-space-3);
+		border-block-end: 1px solid var(--sr-border);
+	}
+
+	.locais {
+		display: grid;
+		gap: var(--sr-space-6);
+		margin-block-start: var(--sr-space-6);
+		list-style: none;
+		padding: 0;
+	}
+
+	.local {
+		display: grid;
+		gap: var(--sr-space-2);
+		padding: var(--sr-space-4);
+		background: var(--sr-bg-surface);
+		border: 1px solid var(--sr-border);
+		border-radius: var(--sr-radius-md);
+	}
+
+	.local__name {
+		font-size: var(--sr-text-md);
+		font-weight: 600;
+	}
+
+	.local__meta,
+	.local__note {
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+	}
+
+	@media (min-width: 36rem) {
+		/* --bp-sm */
+		.locais {
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+		}
+	}
+</style>

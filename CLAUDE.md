@@ -87,6 +87,13 @@ would silently delete the back catalogue from the site. The script also refuses 
 feed parses to zero entries, so a change to YouTube's feed format fails loudly rather than
 emptying the file.
 
+**Deleting a route file does not un-build it.** Astro's content layer keeps a persistent data
+store at `node_modules/.astro/data-store.json` — *not* in `.astro/`, which is the obvious place to
+look. Removing a Markdown file from `src/content/rotas/` leaves its entry in that store, so the
+page keeps being emitted from a stale record and `rm -rf .astro dist` does not help. Clear
+`node_modules/.astro` as well. CI is unaffected (it installs fresh), so this only ever bites
+locally — which is exactly why it is confusing.
+
 **Routes are a content collection**, so publishing one is a Markdown file plus a GPX track — the
 route page, the routes index and the map all derive from that. Keep it a one-file job; that was the
 reason Astro was chosen over hand-written HTML.

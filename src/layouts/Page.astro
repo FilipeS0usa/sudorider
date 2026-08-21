@@ -1,0 +1,43 @@
+---
+/**
+ * Base plus the standard page header block (design-system §5.5): h1, lead,
+ * and an optional count line.
+ *
+ * The count is genuinely useful while the archive is small — it frames
+ * "2 vídeos" as a fact rather than letting the page look truncated.
+ *
+ * Used by every page except / and /mapa.
+ */
+import Base from './Base.astro';
+
+interface Props {
+	title: string;
+	description: string;
+	/** Visible h1, when it differs from the document title. */
+	heading?: string;
+	lead?: string;
+	count?: string;
+}
+
+const { title, description, heading, lead, count } = Astro.props;
+---
+
+<Base title={title} description={description}>
+	<div class="container">
+		<header class="page-header">
+			<h1>{heading ?? title}</h1>
+			{lead && <p class="lead">{lead}</p>}
+			{count && <p class="page-header__count">{count}</p>}
+		</header>
+
+		<div class="page-body">
+			<slot />
+		</div>
+	</div>
+</Base>
+
+<style>
+	.page-body {
+		padding-block: var(--sr-space-12) var(--sr-space-8);
+	}
+</style>

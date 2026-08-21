@@ -1,0 +1,71 @@
+---
+/**
+ * Homepage section header (design-system §5.7).
+ *
+ * The short ochre rule above the heading is one of the seven sanctioned uses
+ * of the accent (docs/brand.md §5) — the same mark as the wordmark's
+ * underscore, doing a third job.
+ */
+interface Props {
+	title: string;
+	id?: string;
+	href?: string;
+	linkLabel?: string;
+}
+
+const { title, id, href, linkLabel } = Astro.props;
+---
+
+<div class="section-header">
+	<h2 class="section-header__title" id={id}>{title}</h2>
+	{
+		href && linkLabel && (
+			<a class="section-header__link u-plain" href={href}>
+				{linkLabel} →
+			</a>
+		)
+	}
+</div>
+
+<style>
+	.section-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--sr-space-2) var(--sr-space-6);
+		margin-block-end: var(--sr-space-8);
+		padding-block-end: var(--sr-space-3);
+		border-block-end: 1px solid var(--sr-border);
+	}
+
+	.section-header__title {
+		position: relative;
+		padding-block-start: var(--sr-space-4);
+	}
+
+	.section-header__title::before {
+		content: '';
+		position: absolute;
+		inset-block-start: 0;
+		inset-inline-start: 0;
+		width: 2.25rem;
+		height: 2px;
+		background: var(--sr-accent);
+	}
+
+	.section-header__link {
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+		white-space: nowrap;
+	}
+
+	.section-header__link:hover {
+		color: var(--sr-accent-text);
+		text-decoration: underline;
+		text-decoration-color: var(--sr-accent);
+		text-decoration-thickness: 0.08em;
+		text-underline-offset: 0.16em;
+		text-decoration-skip-ink: none;
+	}
+</style>

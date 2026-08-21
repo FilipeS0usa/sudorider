@@ -1,0 +1,86 @@
+---
+/**
+ * Contacto (design-system §6.7).
+ *
+ * No form. GitHub Pages is static and cannot send email, and a form service
+ * would mean a third-party account and a scriptable endpoint on an otherwise
+ * zero-JS site (README, "Open decisions"). A mail link and the channel are
+ * honest about how to reach him and cost nothing to maintain.
+ *
+ * PLACEHOLDER: SITE.email is not the real address — see src/components/site.ts.
+ */
+import Page from '../layouts/Page.astro';
+import { SITE } from '../components/site';
+---
+
+<Page
+	title="Contacto"
+	description="Falar sobre colaborações, dúvidas sobre a mota ou sugestões de estrada — por email ou pelo canal."
+	lead="Para colaborações, dúvidas ou sugestões de estrada."
+>
+	<div class="prose">
+		<p>
+			Se quiseres falar sobre uma colaboração, tirar uma dúvida sobre a mota ou sugerir uma
+			estrada que valha a pena, o email é o caminho mais directo. Respondo quando parar.
+		</p>
+	</div>
+
+	<ul class="contactos">
+		<li class="contacto">
+			<span class="contacto__rotulo">Email</span>
+			<a class="contacto__valor" href={`mailto:${SITE.email}`}>{SITE.email}</a>
+		</li>
+		<li class="contacto">
+			<span class="contacto__rotulo">YouTube</span>
+			<a class="contacto__valor" href={SITE.youtube} rel="me">{SITE.youtubeHandle}</a>
+		</li>
+	</ul>
+
+	<div class="prose">
+		<p class="nota">
+			Os comentários no canal também dão — só demoro mais a lá chegar.
+		</p>
+	</div>
+</Page>
+
+<style>
+	.contactos {
+		list-style: none;
+		margin: var(--sr-space-8) 0 0;
+		padding: 0;
+		display: grid;
+		gap: var(--sr-space-3);
+		max-inline-size: var(--sr-measure);
+	}
+
+	.contacto {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--sr-space-2) var(--sr-space-4);
+		padding: var(--sr-space-4);
+		background: var(--sr-bg-surface);
+		border: 1px solid var(--sr-border);
+		border-radius: var(--sr-radius-md);
+	}
+
+	.contacto__rotulo {
+		flex: 0 0 5.5rem;
+		font-size: var(--sr-text-2xs);
+		letter-spacing: var(--sr-tracking-wide);
+		text-transform: uppercase;
+		color: var(--sr-fg-muted);
+	}
+
+	.contacto__valor {
+		font-family: var(--sr-font-mono);
+		font-size: var(--sr-text-sm);
+		word-break: break-word;
+	}
+
+	.nota {
+		margin-block-start: var(--sr-space-8);
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-sm);
+	}
+</style>

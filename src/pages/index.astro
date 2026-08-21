@@ -1,43 +1,276 @@
 ---
-// Asset and internal links go through withBase() — this site is served from
-// a subpath (/sudorider), so hardcoded absolute paths 404 in production.
+/**
+ * Início (design-system §6.1).
+ *
+ * The three-second job: someone arriving from a YouTube description has to
+ * learn what this is, who it is, and that there is something to watch before
+ * they decide to scroll. Header plus hero block is budgeted at 380px on a
+ * 390px phone so the latest-video poster lands inside the fold.
+ *
+ * Sections below the fold render conditionally. A homepage that only shows
+ * what exists reads as small and focused; one with three stub sections reads
+ * as abandoned.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import SectionHeader from '../components/SectionHeader.astro';
+import VideoCard from '../components/VideoCard.astro';
+import VideoList from '../components/VideoList.astro';
+import RouteCard from '../components/RouteCard.astro';
+import GearItem from '../components/GearItem.astro';
+import PortugalOutline from '../components/PortugalOutline.astro';
+import { SITE } from '../components/site';
 import { withBase } from '../lib/url';
-import videos from '../data/videos.json';
-const desc =
-  'SudoRider — motovlog de Filipe numa CFMOTO 450 MT, por Portugal e por onde a estrada levar.';
+import type { Local, Equipamento, Video } from '../lib/types';
+import videosData from '../data/videos.json';
+import locaisData from '../data/locais.json';
+import equipamentoData from '../data/equipamento.json';
+
+const videos = videosData as Video[];
+const locais = locaisData as Local[];
+const equipamento = equipamentoData as Equipamento[];
+
+const rotas = (await getCollection('rotas', ({ data }) => !data.draft)).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+
+const ultimo = videos[0];
+const seguintes = videos.slice(1, 4);
+const notaMapa =
+	locais.length === 1
+		? 'Por agora é só um ponto. Vão aparecendo à medida que os vídeos saem.'
+		: `De momento são ${locais.length} pontos. Vão aparecendo à medida que os vídeos saem.`;
 ---
 
-<html lang="pt-PT">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="generator" content={Astro.generator} />
-		<link rel="icon" type="image/svg+xml" href={withBase("favicon.svg")} />
-		<link rel="icon" href={withBase("favicon.ico")} />
-		<title>SudoRider — trocar os ecrãs por um capacete</title>
-		<meta name="description" content={desc} />
-	</head>
-	<body>
-		<h1>SudoRider</h1>
-		<p>trocar os ecrãs por um capacete</p>
-		<p>Site em construção.</p>
+<Base
+	title="Início"
+	fullTitle={`${SITE.name} — ${SITE.tagline}`}
+	description={SITE.description}
+>
+	<section class="section hero-section">
+		<div class="container hero">
+			<div class="hero__intro">
+				<h1 class="wordmark hero__wordmark">
+					<span class="wordmark__sudo">sudo</span>rider
+				</h1>
+				<p class="hero__tagline">{SITE.tagline}</p>
+				<p class="hero__text">
+					Sou o Filipe. Ando numa CFMOTO 450 MT — a Dora — por Portugal e por onde a estrada
+					levar.
+				</p>
+				<div class="btn-row">
+					<a class="btn btn--primary" href={withBase('/videos')}>Ver os vídeos</a>
+					<a class="btn btn--ghost" href={withBase('/mapa')}>Ver o mapa</a>
+				</div>
+			</div>
 
-		<!-- Placeholder: proves the RSS sync feeds the build. The real Vídeos
-		     page replaces this. -->
-		<h2>Últimos vídeos</h2>
-		<ul>
-			{videos.map((v) => (
-				<li>
-					<a href={v.url}>{v.title}</a>
-					<time datetime={v.published}>
-						{new Date(v.published).toLocaleDateString('pt-PT')}
-					</time>
-				</li>
-			))}
-		</ul>
+			{
+				ultimo && (
+					<div class="hero__video">
+						<VideoCard video={ultimo} variant="hero" headingLevel={2} eyebrow="Último vídeo" />
+					</div>
+				)
+			}
+		</div>
+	</section>
 
-		<p>
-			<a href="https://www.youtube.com/@SudoRider">Canal no YouTube</a>
-		</p>
-	</body>
-</html>
+	{
+		locais.length >= 1 && (
+			<section class="section" aria-labelledby="por-onde-andei">
+				<div class="container">
+					<SectionHeader
+						id="por-onde-andei"
+						title="Por onde andei"
+						href={withBase('/mapa')}
+						linkLabel="Ver o mapa"
+					/>
+					<div class="teaser">
+						<PortugalOutline locais={locais} />
+						<div class="teaser__text">
+							<p>
+								Cada pino é uma volta filmada. O mapa liga o sítio ao vídeo que ali foi
+								gravado.
+							</p>
+							<p class="teaser__note">{notaMapa}</p>
+							<p>
+								<a class="btn btn--ghost teaser__cta" href={withBase('/mapa')}>
+									Abrir o mapa
+								</a>
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+		)
+	}
+
+	{
+		seguintes.length >= 1 && (
+			<section class="section" aria-labelledby="mais-videos">
+				<div class="container">
+					<SectionHeader
+						id="mais-videos"
+						title="Mais vídeos"
+						href={withBase('/videos')}
+						linkLabel="Ver todos"
+					/>
+					<VideoList videos={seguintes} headingLevel={3} showEmpty={false} />
+				</div>
+			</section>
+		)
+	}
+
+	<section class="section" aria-labelledby="sobre">
+		<div class="container">
+			<SectionHeader
+				id="sobre"
+				title="Sobre"
+				href={withBase('/sobre')}
+				linkLabel="Ler a história completa"
+			/>
+			<div class="prose">
+				<p>
+					Nasci em Évora, vivo em Lisboa e ando numa CFMOTO 450 MT a que chamo a Dora. Passei
+					mais de um ano e 14.000 km em cima dela antes de filmar seja o que for.
+				</p>
+				<p>
+					Ainda sem formato fixo: passeios, viagens, uma ou outra escapadela de campismo.
+					Sempre à procura do próximo motivo para arrancar.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	{
+		equipamento.length >= 3 && (
+			<section class="section" aria-labelledby="equipamento">
+				<div class="container">
+					<SectionHeader
+						id="equipamento"
+						title="Equipamento"
+						href={withBase('/equipamento')}
+						linkLabel="Ver todo o equipamento"
+					/>
+					<div class="cards cards--gear">
+						{equipamento.slice(0, 3).map((item) => (
+							<GearItem name={item.name} note={item.note} url={item.url} />
+						))}
+					</div>
+				</div>
+			</section>
+		)
+	}
+
+	{
+		rotas.length >= 1 && (
+			<section class="section" aria-labelledby="rotas">
+				<div class="container">
+					<SectionHeader
+						id="rotas"
+						title="Rotas"
+						href={withBase('/rotas')}
+						linkLabel="Ver todas as rotas"
+					/>
+					<div class={rotas.length <= 3 ? 'stack' : 'cards cards--rotas'}>
+						{rotas.slice(0, 3).map((rota) => (
+							<RouteCard
+								slug={rota.id}
+								title={rota.data.title}
+								region={rota.data.region}
+								distanceKm={rota.data.distanceKm}
+								date={rota.data.date}
+								summary={rota.data.summary}
+								headingLevel={3}
+							/>
+						))}
+					</div>
+				</div>
+			</section>
+		)
+	}
+</Base>
+
+<style>
+	/* Trimmed top padding: the fold budget is header + hero ≤ 380px at 390px
+	   wide, and the full section rhythm would spend 48 of it on air. */
+	.hero-section {
+		padding-block-start: var(--sr-space-8);
+	}
+
+	.hero {
+		display: grid;
+		gap: var(--sr-space-8);
+		align-items: center;
+	}
+
+	.hero__intro > * + * {
+		margin-block-start: var(--sr-space-4);
+	}
+
+	.hero__wordmark {
+		font-size: var(--sr-text-hero);
+		line-height: var(--sr-leading-tight);
+	}
+
+	.hero__tagline {
+		margin-block-start: var(--sr-space-2);
+		font-size: var(--sr-text-lg);
+		color: var(--sr-fg-muted);
+	}
+
+	.hero__text {
+		max-width: 26rem;
+		text-wrap: pretty;
+	}
+
+	.btn-row {
+		margin-block-start: var(--sr-space-6);
+	}
+
+	/* --- Map teaser ------------------------------------------------------- */
+
+	.teaser {
+		position: relative;
+		display: grid;
+		gap: var(--sr-space-6);
+		justify-items: start;
+	}
+
+	.teaser__text > * + * {
+		margin-block-start: var(--sr-space-4);
+	}
+
+	.teaser__text p {
+		max-width: 32rem;
+	}
+
+	.teaser__note {
+		font-size: var(--sr-text-sm);
+		color: var(--sr-fg-muted);
+	}
+
+	/* Stretched link: the whole teaser is clickable, but only the button is in
+	   the accessibility tree. */
+	.teaser__cta::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+	}
+
+	@media (min-width: 36rem) {
+		/* --bp-sm */
+		.teaser {
+			grid-template-columns: auto minmax(0, 1fr);
+			align-items: center;
+			gap: var(--sr-space-8);
+		}
+	}
+
+	@media (min-width: 52rem) {
+		/* --bp-md */
+		.hero {
+			grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+			gap: var(--sr-space-12);
+		}
+	}
+</style>
