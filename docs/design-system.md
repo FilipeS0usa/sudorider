@@ -771,7 +771,7 @@ rather than letting the page look truncated.
 │  SudoRider                    Navegação          Segue               │
 │  trocar os ecrãs por um       Início   Rotas     YouTube             │
 │  capacete                     Vídeos   Equip.    Instagram           │
-│                               Mapa     Sobre     ola@sudorider.com   │
+│                               Mapa     Sobre     info@sudorider.com  │
 │                                        Contacto                      │
 ├──────────────────────────────────────────────────────────────────────┤
 │  © 2026 SudoRider · Código MIT · Conteúdo CC BY-SA 4.0               │
@@ -1134,7 +1134,7 @@ an email link solves.
 │  ────────────────────────────────────────          │
 │  ┌──────────────────────────────────────────────┐  │
 │  │  E-mail                                      │  │  card, --color-surface
-│  │  ola@sudorider.com                    →      │  │  --fs-500, mono
+│  │  info@sudorider.com                    →     │  │  --fs-500, mono
 │  └──────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────┐  │
 │  │  [▶] YouTube      @SudoRider          →      │  │

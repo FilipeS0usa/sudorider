@@ -8,7 +8,7 @@ export const SITE = {
 	name: 'SudoRider',
 	tagline: 'trocar os ecrãs por um capacete',
 	/** PLACEHOLDER — needs Filipe's real address. */
-	email: 'ola@sudorider.com',
+	email: 'info@sudorider.com',
 	youtube: 'https://www.youtube.com/@SudoRider',
 	youtubeHandle: '@SudoRider',
 	instagram: 'https://www.instagram.com/sudo.rider/',
