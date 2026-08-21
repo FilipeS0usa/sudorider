@@ -73,6 +73,13 @@ sync calls directly in a second job, gated on a `changed` output. Removing that 
 trigger, or the `deploy` job in the sync, reintroduces the failure quietly: the video appears in
 the repo, both workflows report success, and the site never updates.
 
+**The feed 404s intermittently from CI.** Observed in a real scheduled run: YouTube answered the
+RSS feed with 404 from a GitHub Actions runner, and the identical request succeeded on a re-run
+minutes later and always succeeds from a home connection. It appears to be datacenter-IP related.
+`sync-videos.mjs` therefore sends a browser user-agent and retries four times with backoff before
+giving up. Do not reduce this to a single attempt: the visible symptom is a red workflow, but the
+real cost is a morning where a newly published video is silently skipped until the next run.
+
 **Shorts are detected by probe, not by heuristic.** The feed carries no aspect ratio and every
 thumbnail is 480x360, so nothing in the feed distinguishes a 9:16 Short from a 16:9 video — and a
 title heuristic fails on real data (the channel's Short says "Short" in the title but carries no

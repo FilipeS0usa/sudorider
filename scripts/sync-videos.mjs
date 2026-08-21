@@ -94,13 +94,39 @@ async function readExisting() {
 	}
 }
 
-const res = await fetch(FEED, { headers: { 'user-agent': 'sudorider-site-sync' } });
-if (!res.ok) {
-	console.error(`Feed request failed: ${res.status} ${res.statusText}`);
+/**
+ * A browser user-agent, and retries.
+ *
+ * Observed in CI: YouTube intermittently answers this feed with 404 from
+ * datacenter IPs — the same request succeeds minutes later and always succeeds
+ * from a home connection. A single attempt therefore fails the workflow at
+ * random, and on a morning when a video *had* been published it would silently
+ * skip that video until the next day's run.
+ */
+const UA =
+	'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+async function fetchFeed(attempts = 4) {
+	let lastError = '';
+	for (let attempt = 1; attempt <= attempts; attempt++) {
+		try {
+			const res = await fetch(FEED, { headers: { 'user-agent': UA, cookie: CONSENT } });
+			if (res.ok) return await res.text();
+			lastError = `${res.status} ${res.statusText}`;
+		} catch (error) {
+			lastError = error instanceof Error ? error.message : String(error);
+		}
+		if (attempt < attempts) {
+			const waitMs = 2000 * 2 ** (attempt - 1); // 2s, 4s, 8s
+			console.warn(`Feed attempt ${attempt}/${attempts} failed (${lastError}); retrying in ${waitMs / 1000}s.`);
+			await new Promise((resolve) => setTimeout(resolve, waitMs));
+		}
+	}
+	console.error(`Feed request failed after ${attempts} attempts: ${lastError}`);
 	process.exit(1);
 }
 
-const fetched = parseFeed(await res.text());
+const fetched = parseFeed(await fetchFeed());
 if (fetched.length === 0) {
 	// A structural change to the feed would otherwise wipe the file.
 	console.error('Feed parsed to zero entries — refusing to write.');
