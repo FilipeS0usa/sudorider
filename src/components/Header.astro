@@ -167,6 +167,22 @@ function isCurrent(href: string): boolean {
 			display: contents;
 		}
 
+		/*
+		 * `display: contents` alone no longer reveals a closed <details>. Browsers
+		 * now hide its contents through the ::details-content pseudo-element with
+		 * `content-visibility: hidden`, which a display value on the parent does
+		 * not override — so the desktop nav rendered as nothing but the wordmark,
+		 * with all seven links skipped in the tab order and no toggle to open them
+		 * (.nav__toggle is display:none here).
+		 *
+		 * Browsers without ::details-content ignore this rule and keep working off
+		 * `display: contents` above, so no fallback is needed.
+		 */
+		.nav::details-content {
+			content-visibility: visible;
+			display: contents;
+		}
+
 		.nav__toggle {
 			display: none;
 		}
