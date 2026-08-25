@@ -1,0 +1,23 @@
+# Dependency updates. The Actions entries matter more than they look: the
+# workflows pin actions to commit SHAs, which is safe but frozen — without
+# Dependabot the pins never move and a security fix upstream goes unnoticed.
+# It rewrites the SHA and the trailing version comment together.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # One PR for the lot rather than one per package. This is a static site
+    # with a single lockfile; reviewing them separately buys nothing.
+    groups:
+      npm:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
