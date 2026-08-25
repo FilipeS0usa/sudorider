@@ -102,11 +102,16 @@ async function readExisting() {
  * from a home connection. A single attempt therefore fails the workflow at
  * random, and on a morning when a video *had* been published it would silently
  * skip that video until the next day's run.
+ *
+ * The retries are spread over a minute rather than fourteen seconds, because
+ * the refusal is per-IP and outlasts a tight loop from the same runner. When
+ * even that fails, the answer is not to fail the workflow — see below.
  */
 const UA =
 	'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
-async function fetchFeed(attempts = 4) {
+/** Null when the feed refused every attempt — the caller decides what that means. */
+async function fetchFeed(attempts = 5) {
 	let lastError = '';
 	for (let attempt = 1; attempt <= attempts; attempt++) {
 		try {
@@ -117,16 +122,42 @@ async function fetchFeed(attempts = 4) {
 			lastError = error instanceof Error ? error.message : String(error);
 		}
 		if (attempt < attempts) {
-			const waitMs = 2000 * 2 ** (attempt - 1); // 2s, 4s, 8s
+			const waitMs = 5000 * 2 ** (attempt - 1); // 5s, 10s, 20s, 40s
 			console.warn(`Feed attempt ${attempt}/${attempts} failed (${lastError}); retrying in ${waitMs / 1000}s.`);
 			await new Promise((resolve) => setTimeout(resolve, waitMs));
 		}
 	}
-	console.error(`Feed request failed after ${attempts} attempts: ${lastError}`);
-	process.exit(1);
+	console.warn(`Feed request failed after ${attempts} attempts: ${lastError}`);
+	return null;
 }
 
-const fetched = parseFeed(await fetchFeed());
+const xml = await fetchFeed();
+
+/*
+ * An unreachable feed is not a broken build.
+ *
+ * YouTube refusing a datacenter IP is weather, not a bug: nothing in the repo
+ * is wrong, nothing needs fixing, and the next scheduled run picks the video up
+ * by itself. Exiting non-zero here mailed a red workflow every morning for
+ * something that self-heals, which is the fastest way to teach someone to
+ * ignore this workflow's mail — and then to miss a failure that does matter.
+ *
+ * So: warn, report nothing changed, exit clean. A genuine breakage still fails
+ * loudly further down, where a feed that answers but no longer parses refuses
+ * to overwrite the file. If videos stop appearing on the site for days, run
+ * `npm run sync:videos` from a home connection: a 404 there means the channel
+ * id or the feed URL really has changed.
+ */
+if (xml === null) {
+	// A GitHub Actions warning annotation: visible in the run, no e-mail.
+	console.log('::warning::Feed unavailable from this runner; leaving videos.json untouched.');
+	if (process.env.GITHUB_OUTPUT) {
+		await writeFile(process.env.GITHUB_OUTPUT, 'changed=false\n', { flag: 'a' });
+	}
+	process.exit(0);
+}
+
+const fetched = parseFeed(xml);
 if (fetched.length === 0) {
 	// A structural change to the feed would otherwise wipe the file.
 	console.error('Feed parsed to zero entries — refusing to write.');

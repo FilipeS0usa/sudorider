@@ -2,9 +2,17 @@ name: Sync videos
 
 on:
   schedule:
-    # 06:00 UTC daily. Cron on GitHub Actions is best-effort and can be delayed
-    # under load, which is fine for this — nothing depends on the exact minute.
-    - cron: '0 6 * * *'
+    # Every three hours, not once a day.
+    #
+    # Two reasons. YouTube intermittently refuses this feed from datacenter IPs
+    # (see scripts/sync-videos.mjs), and a run that gets refused now simply gets
+    # another go in three hours instead of leaving the site a day behind. And a
+    # video published in the evening reaches the site the same evening rather
+    # than the following morning.
+    #
+    # Cron on GitHub Actions is best-effort and can be delayed under load, which
+    # is fine here — nothing depends on the exact minute.
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 jobs:
