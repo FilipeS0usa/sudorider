@@ -53,6 +53,27 @@ These are decisions already made. Do not quietly reverse them — raise it with 
   naive concatenation produces `/sudoriderfavicon.svg` — the starter's `index.astro` shipped with
   exactly that bug.
 
+- **Every action is pinned to a commit SHA, and GitHub enforces it.** The repo has
+  `sha_pinning_required` on, so a workflow referencing an action by tag is refused at *Set up
+  job* — not at the step, and with no partial run to read. The trailing `# v4.4.0` comment is how
+  a human reads the pin and how Dependabot rewrites it; keep it accurate. The catch that is not
+  obvious: **enforcement is transitive.** A composite action that references a tag internally
+  fails the same way even though your own file is pinned, and you cannot fix it from here — that
+  is why `upload-pages-artifact` sits at v4.0.0 rather than v3.0.1, v4.0.0 being the first release
+  that pins its own `actions/upload-artifact`. Check a new action's `action.yml` for nested
+  `uses:` before adding it. Local references (`uses: ./.github/workflows/deploy.yml`) are exempt.
+
+- **`main` refuses force-pushes and deletion, with no bypass for anyone.** A ruleset, not classic
+  branch protection. It deliberately does *not* require pull requests — pushing straight to main
+  is still the normal way to publish here — and it does *not* require signed commits, which would
+  break `sync-videos.yml`, since the bot pushes over git CLI rather than the API. Ordinary
+  fast-forward pushes are untouched, which is why the sync bot needs no exemption. To rewrite
+  history deliberately, disable the ruleset for that push rather than adding a standing bypass.
+
+- **Issues, wiki and projects are off.** `SECURITY.md` plus GitHub's private vulnerability
+  reporting is the only inbound channel, and pull requests still work. If Issues are ever turned
+  back on, `SECURITY.md` opens by saying they are disabled — fix that line too.
+
 ## Architecture notes
 
 **Where the specs and the build disagree, this file wins.** Two overrides so far, both
