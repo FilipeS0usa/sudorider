@@ -16,8 +16,18 @@
  * in a data attribute, popups in <template> elements. The script reads the DOM
  * instead of receiving props, so the two halves stay independent.
  */
-import type { Local, Video } from '../lib/types';
-import { videos } from '../lib/videos';
+import type { Local } from '../lib/types';
+import { agruparLocais } from '../lib/locais';
+import { tracadosDasRotas, type RotaLigada, type TracadoRota } from '../lib/rotas';
+import { withBase } from '../lib/url';
+/*
+ * The date and title helpers used to be copied into this file, with a comment
+ * saying the shared module did not exist yet. It does now, and mapa.astro —
+ * which renders the text alternative for this map — already imports from it.
+ * Two copies of the title regex is how the popup and the list start disagreeing
+ * about what a video is called.
+ */
+import { dataCurta, tituloLimpo } from './format';
 
 // Leaflet's stylesheet, imported here rather than globally so Astro only ships
 // it on the pages that use a map (docs/design-system.md §10).
@@ -26,79 +36,86 @@ import 'leaflet/dist/leaflet.css';
 interface Props {
 	locais: Local[];
 	height?: string;
+	/**
+	 * The published route tracks. The map page passes the same array it lists in
+	 * text underneath, so "the list cannot advertise a route the map does not
+	 * draw" is a property of there being one array, not of two calls happening to
+	 * agree. Omit it and this reads them itself — at the cost of parsing every
+	 * GPX a second time.
+	 */
+	tracados?: TracadoRota[];
 }
 
-const { locais, height = '70vh' } = Astro.props;
+const { locais, height = '70vh', tracados: tracadosProp } = Astro.props;
 
 // The height lands in an inline custom property, so refuse anything that is not
 // a plain CSS length expression rather than pasting it into the style attribute.
 const CSS_LENGTH = /^[\w%.\s()+*/,-]+$/;
 const mapHeight = CSS_LENGTH.test(height) ? height : '70vh';
 
-// Shorts are excluded — see src/lib/videos.ts.
-const byId = new Map(videos.map((video) => [video.id, video]));
-
-/** PT month abbreviations, spelled out rather than left to the build machine's ICU. */
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-
-function shortDate(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return '';
-	return `${date.getUTCDate()} ${MESES[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-}
-
-/**
- * Strip the trailing hashtag run YouTube titles carry (§5.1). Two or more, so
- * a meaningful single tag such as "| Motovlog #1" survives.
+/*
+ * Grouped by place, not one pin per video: two rides filmed in the same town
+ * land within a few hundred metres of each other, and at the zoom levels this
+ * map uses that puts one marker exactly on top of the other — the one
+ * underneath cannot be clicked, cannot be tabbed to, and looks like a missing
+ * video.
  *
- * Duplicated deliberately: docs/design-system.md §10 puts cleanTitle() in
- * src/lib/video.ts, which is another agent's file and does not exist yet.
- * Delete this and import it once it does.
+ * The grouping itself lives in src/lib/locais.ts because mapa.astro renders the
+ * same pins as text underneath this map, and the two must not drift apart.
+ * Everything below is presentation: what a popup shows.
  */
-function cleanTitle(raw: string): string {
-	return raw.replace(/(?:\s+#[^\s#]+){2,}\s*$/u, '').replace(/\s+/g, ' ').trim();
+const grupos = await agruparLocais(locais);
+
+/** One ride, ready to render. */
+interface VoltaVista {
+	href: string;
+	/** Null when the video is not in videos.json — see below. */
+	thumb: string | null;
+	title: string;
+	iso: string;
+	date: string;
+	note: string;
+	rota: RotaLigada | undefined;
 }
 
-// A pin exists to link a place to a video (CLAUDE.md), so a pin without an id
-// is a bug and should stop the build rather than ship a dead popup. A pin whose
-// id is not in videos.json is only a warning: that file is generated from the
-// channel feed and may legitimately lag behind a new pin. The popup still links
-// to YouTube correctly, it just shows no title or date.
-for (const local of locais) {
-	if (!local.video || !local.video.trim()) {
-		throw new Error(
-			`RideMap: the pin "${local.name}" in src/data/locais.json has no video id. ` +
-				'A pin exists to link a place to the video filmed there.',
-		);
-	}
-	if (!byId.has(local.video)) {
-		console.warn(
-			`[RideMap] pin "${local.name}" references video "${local.video}", which is not in ` +
-				'src/data/videos.json. The popup will link out but show no title or date. ' +
-				'Run `npm run sync:videos` if the video is newer than the data file.',
-		);
-	}
-}
-
-const pins = locais.map((local) => {
-	const video = byId.get(local.video);
-	return {
-		name: local.name,
-		lat: local.lat,
-		lng: local.lng,
-		note: local.note ?? '',
+const pins = grupos.map((grupo) => ({
+	name: grupo.label,
+	lat: grupo.lat,
+	lng: grupo.lng,
+	voltas: grupo.voltas.map(({ local, video, rota }): VoltaVista => ({
 		href: video?.url ?? `https://www.youtube.com/watch?v=${local.video}`,
 		// mqdefault is a true 16:9 frame; the hqdefault stored in videos.json is
 		// 4:3 with letterbox bars baked in, which the popup well would show.
-		thumb: `https://i.ytimg.com/vi/${local.video}/mqdefault.jpg`,
-		title: video ? cleanTitle(video.title) : '',
+		// Only when the video is known: an id the feed has not delivered yet
+		// 404s, and a broken image in the popup reads worse than no image.
+		thumb: video ? `https://i.ytimg.com/vi/${local.video}/mqdefault.jpg` : null,
+		title: video ? tituloLimpo(video.title) : '',
 		iso: video?.published ?? '',
-		date: video ? shortDate(video.published) : '',
-	};
-});
+		date: video ? dataCurta(video.published) : '',
+		note: local.note ?? '',
+		rota,
+	})),
+}));
+
+/*
+ * Published route tracks, drawn under the pins. A pin says where a video was
+ * filmed; a track says where the ride went — and for a linear route those are
+ * very different things. Without this, a 130km ride down the Costa Vicentina
+ * and a 5km loop are the same dot.
+ */
+const tracados = tracadosProp ?? (await tracadosDasRotas());
 
 /** Only the geometry crosses into the browser; the popups travel as markup. */
-const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
+const markers = pins.map(({ name, lat, lng, voltas }, index) => ({
+	// Explicit index rather than relying on array position: readPins() in the
+	// browser filters, and pairing the surviving pins against the unfiltered
+	// <template> list by position would hand a place someone else's popup.
+	index,
+	name,
+	lat,
+	lng,
+	count: voltas.length,
+}));
 ---
 
 <div
@@ -106,44 +123,94 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 	data-sr-ridemap
 	data-state="nojs"
 	data-pins={JSON.stringify(markers)}
+	data-tracks={JSON.stringify(tracados.map(({ segments }) => segments))}
 	style={`--sr-map-height:${mapHeight}`}
 >
-	<div class="sr-map__canvas" role="region" aria-label="Mapa dos locais filmados"></div>
+	<div
+		class="sr-map__canvas"
+		role="region"
+		aria-label="Mapa dos locais filmados e das rotas publicadas"
+		aria-describedby="mapa-alternativa"
+	></div>
 
 	<p class="sr-map__note sr-map__note--nojs">
-		O mapa precisa de JavaScript. A lista de locais está aqui em baixo.
+		O mapa precisa de JavaScript. As listas de locais e de rotas estão aqui em baixo.
 	</p>
 	<p class="sr-map__note sr-map__note--status" hidden>A carregar o mapa…</p>
 
 	<div class="sr-map__popups">
 		{
-			pins.map((pin) => (
-				<template>
-					<a class="sr-pop" href={pin.href}>
-						<img
-							class="sr-pop__thumb"
-							src={pin.thumb}
-							alt=""
-							width="320"
-							height="180"
-							loading="lazy"
-							decoding="async"
-							referrerpolicy="strict-origin-when-cross-origin"
-						/>
-						<span class="sr-pop__text">
-							<span class="sr-pop__place">{pin.name}</span>
-							{pin.date && (
-								<time class="sr-pop__date" datetime={pin.iso}>
-									{pin.date}
-								</time>
-							)}
-							{pin.title && <span class="sr-pop__title">{pin.title}</span>}
-							{pin.note && <span class="sr-pop__note">{pin.note}</span>}
-							<span class="sr-pop__cta">
-								Ver o vídeo <span aria-hidden="true">→</span>
-							</span>
-						</span>
-					</a>
+			pins.map((grupo, index) => (
+				<template data-pin={index}>
+					<div class={grupo.voltas.length > 1 ? 'sr-pop sr-pop--varias' : 'sr-pop'}>
+						{grupo.voltas.length > 1 && (
+							<p class="sr-pop__cabecalho">
+								<span class="sr-pop__place">{grupo.name}</span>{' '}
+								<span class="sr-pop__count">{grupo.voltas.length} voltas</span>
+							</p>
+						)}
+
+						<ul class="sr-pop__lista">
+							{grupo.voltas.map((volta) => (
+								<li class="sr-pop__volta">
+									{volta.thumb && (
+										<img
+											class="sr-pop__thumb"
+											src={volta.thumb}
+											alt=""
+											width="320"
+											height="180"
+											loading="lazy"
+											decoding="async"
+											referrerpolicy="strict-origin-when-cross-origin"
+										/>
+									)}
+									<span class="sr-pop__text">
+										{grupo.voltas.length === 1 && (
+											<span class="sr-pop__place">{grupo.name}</span>
+										)}
+										{volta.date && (
+											<time class="sr-pop__date" datetime={volta.iso}>
+												{volta.date}
+											</time>
+										)}
+										{volta.title && <span class="sr-pop__title">{volta.title}</span>}
+										{volta.note && <span class="sr-pop__note">{volta.note}</span>}
+
+										<span class="sr-pop__acoes">
+											{/*
+											 * With several rides in one popup these links would
+											 * otherwise be "Ver o vídeo, Ver a rota, Ver o vídeo,
+											 * Ver a rota" in a screen reader's link list —
+											 * identical names, different destinations. The visible
+											 * text stays put, so "Ver o vídeo" still matches the
+											 * accessible name (2.5.3).
+											 */}
+											<a class="sr-pop__cta" href={volta.href}>
+												Ver o vídeo
+												{grupo.voltas.length > 1 && volta.title && (
+													<span class="visually-hidden">: {volta.title}</span>
+												)}{' '}
+												<span aria-hidden="true">→</span>
+											</a>
+											{volta.rota && (
+												<a
+													class="sr-pop__cta"
+													href={withBase(`/rotas/${volta.rota.slug}`)}
+												>
+													Ver a rota
+													{grupo.voltas.length > 1 && (
+														<span class="visually-hidden">: {volta.rota.title}</span>
+													)}{' '}
+													<span aria-hidden="true">→</span>
+												</a>
+											)}
+										</span>
+									</span>
+								</li>
+							))}
+						</ul>
+					</div>
 				</template>
 			))
 		}
@@ -234,6 +301,18 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 		filter: var(--sr-map-tiles);
 	}
 
+	/* Live tokens rather than a stroke baked in at load — see the drawing code.
+	   The tile filter never reaches the overlay pane, so these two carry the
+	   theme themselves. */
+	.sr-map :global(.sr-track--casing) {
+		stroke: var(--sr-map-track-casing);
+	}
+
+	.sr-map :global(.sr-track--ink) {
+		stroke: var(--sr-map-track);
+		stroke-opacity: 0.85;
+	}
+
 	.sr-map :global(a:focus-visible),
 	.sr-map :global(.leaflet-container:focus-visible),
 	.sr-map :global(.sr-pin:focus-visible) {
@@ -322,6 +401,35 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 		width: 2.75rem;
 		height: 2.75rem;
 		translate: -50% -50%;
+	}
+
+	/* Count, only when a pin carries more than one ride. Ink on surface rather
+	   than more ochre: the accent is the pin's job, and a second ochre shape
+	   hanging off it would read as a different kind of pin. */
+	.sr-map :global(.sr-pin__count) {
+		position: absolute;
+		inset-block-start: -0.45rem;
+		inset-inline-start: 0.6rem;
+		z-index: 1;
+		min-width: 1.05rem;
+		height: 1.05rem;
+		padding-inline: 0.2rem;
+		background: var(--sr-map-pin-stroke);
+		/* Both of these must be literal for the same reason --sr-map-pin-stroke
+		   is (tokens.css:76): the badge sits on the marker pane, which the dark
+		   tile filter never touches, so it renders in real colours in both
+		   themes. --sr-bg-surface flips to --sr-cool-800 in dark, which would
+		   put near-black text and a near-black ring on near-black ink — 1.05:1,
+		   an unreadable blob over the ochre dot. --sr-warm-100 is a palette
+		   primitive and is redefined by neither theme block. */
+		border: 1px solid var(--sr-warm-100);
+		border-radius: 999px;
+		color: var(--sr-warm-100);
+		font-size: 0.625rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.05rem;
+		text-align: center;
 	}
 
 	.sr-map :global(.sr-pin:hover .sr-pin__dot),
@@ -438,19 +546,107 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 		line-height: var(--sr-leading-snug);
 	}
 
-	.sr-map :global(.sr-pop__cta) {
-		display: block;
+	/* Two actions now, so they sit in a row and each is its own link. The
+	   popup is no longer one big anchor: a stretched link over the whole card
+	   would swallow "ver a rota", and nesting one anchor inside another is not
+	   valid HTML. */
+	.sr-map :global(.sr-pop__acoes) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--sr-space-1) var(--sr-space-4);
 		margin-block-start: var(--sr-space-2);
+	}
+
+	.sr-map :global(.sr-pop__cta) {
 		color: var(--sr-accent-text);
 		font-size: var(--sr-text-sm);
 		font-weight: 600;
+		text-decoration: none;
+		/* Keeps the two links a comfortable target without padding them apart. */
+		padding-block: 2px;
 	}
 
-	.sr-map :global(.sr-pop:hover .sr-pop__cta),
-	.sr-map :global(.sr-pop:focus-visible .sr-pop__cta) {
+	.sr-map :global(.sr-pop__cta:hover),
+	.sr-map :global(.sr-pop__cta:focus-visible) {
 		text-decoration: underline;
 		text-decoration-thickness: 0.08em;
 		text-underline-offset: 0.15em;
+	}
+
+	/* ---------------------------------------------------------------
+	   One pin, one or more rides. The single-ride popup keeps the original
+	   layout — big 16:9 frame, text beneath. Two or more switch to compact
+	   rows so the popup stays a popup instead of becoming a page.
+	   --------------------------------------------------------------- */
+
+	.sr-map :global(.sr-pop__lista) {
+		display: block;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.sr-map :global(.sr-pop__cabecalho) {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--sr-space-2);
+		margin: 0;
+		/* Clears Leaflet's close button, which is 2.75rem square. */
+		/* Clears Leaflet's close button (2.75rem square) with a little slack, so
+		   the count does not sit flush against its edge. */
+		padding: var(--sr-space-3) calc(2.75rem + var(--sr-space-2)) var(--sr-space-2)
+			var(--sr-space-3);
+	}
+
+	.sr-map :global(.sr-pop__count) {
+		flex: none;
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-2xs);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__lista) {
+		/* A place with many rides scrolls inside the popup rather than growing
+		   past the top of the map, where the close button goes out of reach. */
+		max-block-size: 16rem;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		/* overflow-y: auto also clips the x axis, which would cut the focus ring
+		   off a link scrolled to the very edge. */
+		scroll-padding-block: 4px;
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__volta) {
+		display: grid;
+		grid-template-columns: 4.5rem 1fr;
+		gap: var(--sr-space-3);
+		align-items: start;
+		padding: var(--sr-space-3);
+		border-block-start: 1px solid var(--sr-border);
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__volta:first-child) {
+		border-block-start: 0;
+	}
+
+	/* No thumbnail (video not synced yet): the text takes the whole row rather
+	   than leaving a 4.5rem hole where the frame would be. */
+	.sr-map :global(.sr-pop--varias .sr-pop__volta:not(:has(.sr-pop__thumb))) {
+		grid-template-columns: 1fr;
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__thumb) {
+		border-radius: var(--sr-radius-sm);
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__text) {
+		padding: 0;
+	}
+
+	.sr-map :global(.sr-pop--varias .sr-pop__title) {
+		font-size: var(--sr-text-xs);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -473,6 +669,10 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 		name: string;
 		lat: number;
 		lng: number;
+		/** Rides filmed at this place. 1 for most pins. */
+		count: number;
+		/** Position in the unfiltered build-time list, matching data-pin. */
+		index: number;
 	}
 
 	// Raster tiles from OSM directly: no key, no billing account, no second
@@ -490,11 +690,64 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 			if (!Array.isArray(parsed)) return [];
 			return parsed.filter(
 				(pin): pin is Pin =>
-					typeof pin?.lat === 'number' && typeof pin?.lng === 'number' && Number.isFinite(pin.lat),
+					typeof pin?.lat === 'number' &&
+					typeof pin?.lng === 'number' &&
+					typeof pin?.count === 'number' &&
+					typeof pin?.index === 'number' &&
+					Number.isFinite(pin.lat) &&
+					Number.isFinite(pin.lng),
 			);
 		} catch {
 			return [];
 		}
+	}
+
+	/** Same posture as readPins: the attribute is parsed, not trusted. */
+	function readTracks(root: HTMLElement): [number, number][][][] {
+		const ponto = (p: unknown): p is [number, number] =>
+			Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+
+		try {
+			const parsed: unknown = JSON.parse(root.dataset.tracks ?? '[]');
+			if (!Array.isArray(parsed)) return [];
+			return parsed
+				.filter(Array.isArray)
+				.map((rota: unknown[]) =>
+					rota
+						.filter(Array.isArray)
+						.map((segmento: unknown[]) => segmento.filter(ponto))
+						.filter((segmento) => segmento.length >= 2),
+				)
+				.filter((rota) => rota.length > 0);
+		} catch {
+			return [];
+		}
+	}
+
+	/*
+	 * focus() that keeps asking until it takes.
+	 *
+	 * While Leaflet is opening or tearing down a popup, a focus() call is
+	 * silently a no-op, and how long that lasts depends on the path: with
+	 * animations on it works immediately; with prefers-reduced-motion
+	 * (fadeAnimation off) it needs tens of milliseconds. Both were measured in a
+	 * browser, not guessed. Retrying across a few frames is cheap and does not
+	 * bake in a delay that will be wrong on a slower machine. Bounded, so an
+	 * element that goes away mid-retry cannot spin.
+	 */
+	function focar(alvo: HTMLElement | null | undefined, aoPegar?: () => void, tentativas = 12) {
+		if (!alvo) return;
+		const tentar = () => {
+			if (!document.contains(alvo)) return;
+			if (document.activeElement === alvo) {
+				aoPegar?.();
+				return;
+			}
+			alvo.focus({ preventScroll: true });
+			if (document.activeElement === alvo) aoPegar?.();
+			else if (--tentativas > 0) requestAnimationFrame(tentar);
+		};
+		tentar();
 	}
 
 	function build(root: HTMLElement) {
@@ -503,8 +756,9 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 
 		const nojs = root.querySelector<HTMLElement>('.sr-map__note--nojs');
 		const status = root.querySelector<HTMLElement>('.sr-map__note--status');
-		const templates = [...root.querySelectorAll<HTMLTemplateElement>('.sr-map__popups template')];
+		const popups = root.querySelector<HTMLElement>('.sr-map__popups');
 		const pins = readPins(root);
+		const tracks = readTracks(root);
 
 		// From here the map is this element's job, so swap the no-JS sentence
 		// for a loading one before Leaflet starts asking for tiles.
@@ -515,8 +769,14 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 		const map = L.map(canvas, {
 			zoomControl: false,
 			scrollWheelZoom: true, // this page's whole purpose (§6.5)
-			minZoom: 5,
-			maxZoom: 17,
+			/*
+			 * Down to the whole world. The rides are all in Portugal today, but the
+			 * map should not assert that is all there is — zooming out to see where
+			 * Portugal sits, or to look at somewhere a trip might go, is a
+			 * reasonable thing to want from a map about travelling.
+			 */
+			minZoom: 2,
+			maxZoom: 16,
 			zoomAnimation: !reduceMotion,
 			fadeAnimation: !reduceMotion,
 			markerZoomAnimation: !reduceMotion,
@@ -528,56 +788,165 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 			.zoom({ position: 'topleft', zoomInTitle: 'Aproximar', zoomOutTitle: 'Afastar' })
 			.addTo(map);
 
-		const tiles = L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
+		/*
+		 * noWrap matters now that minZoom reaches a world view: at zoom 2 the world
+		 * is 1024px, so in any container wider than that Leaflet would tile
+		 * repeated copies of it side by side. maxBounds stops the *drag* into a
+		 * copy; only this stops one being drawn.
+		 */
+		const tiles = L.tileLayer(TILES, {
+			attribution: ATTRIBUTION,
+			maxZoom: 19,
+			noWrap: true,
+		}).addTo(map);
 
-		// Initial view. One pin is the launch state and has to look deliberate:
-		// fitBounds on a single point snaps to maximum zoom, which reads as a
-		// bug, so a single pin gets a regional view with its surroundings.
-		if (pins.length === 0) {
+		// Everything the view has to contain: pins and every track point. A route
+		// running away from its pin must not start off screen.
+		const geometria: [number, number][] = [
+			...pins.map((pin) => [pin.lat, pin.lng] as [number, number]),
+			...tracks.flat(2),
+		];
+
+		/*
+		 * Initial view. One pin and no track is the launch state and has to look
+		 * deliberate: fitBounds on a single point snaps to maximum zoom, which
+		 * reads as a bug, so it gets a regional view with its surroundings
+		 * instead. Anything with a track has real extent, so fit it.
+		 */
+		if (geometria.length === 0) {
 			map.setView([39.6, -8.0], 6); // mainland Portugal
-		} else if (pins.length === 1) {
+		} else if (pins.length === 1 && tracks.length === 0) {
 			const only = pins[0]!;
 			map.setView([only.lat, only.lng], 10);
 		} else {
-			map.fitBounds(
-				L.latLngBounds(pins.map((pin) => [pin.lat, pin.lng] as [number, number])),
-				{ padding: [40, 40], maxZoom: 12 },
-			);
+			map.fitBounds(L.latLngBounds(geometria), { padding: [40, 40], maxZoom: 12 });
 		}
 
-		// Keep panning near the rides rather than out over the empty Atlantic,
-		// with enough slack that a ride abroad would still fit.
-		if (pins.length > 0) {
-			const lats = pins.map((pin) => pin.lat);
-			const lngs = pins.map((pin) => pin.lng);
-			map.setMaxBounds([
-				[Math.max(-85, Math.min(...lats) - 6), Math.max(-180, Math.min(...lngs) - 8)],
-				[Math.min(85, Math.max(...lats) + 6), Math.min(180, Math.max(...lngs) + 8)],
-			]);
+		/*
+		 * No maxBounds at all, deliberately — and `maxBoundsViscosity` with it,
+		 * which does not do what its name suggests here.
+		 *
+		 * Seeing the whole world means the world is *smaller* than the viewport,
+		 * and that is exactly the state in which Leaflet recentres. Viscosity only
+		 * limits how far a drag travels (`Drag._onPreDragLimit`); the spring-back
+		 * comes from `_panInsideMaxBounds` on moveend, whose `_rebound()` returns
+		 * the recentring offset `(left - right) / 2` whenever the viewport exceeds
+		 * the box, viscosity or not. So any maxBounds — even the whole world —
+		 * makes every drag snap back once you are zoomed out far enough to see it
+		 * all. Deriving a zoom floor from the viewport avoids the snap-back only by
+		 * preventing the world view, which is the thing that was asked for.
+		 *
+		 * Without maxBounds, Leaflet never registers that moveend handler and there
+		 * is nothing to spring back from. The cost is that panning can run past the
+		 * edge of the map into empty background; `noWrap` on the tile layer keeps
+		 * that as honest grey rather than a repeated copy of the world. The opening
+		 * view still frames the rides, so nobody starts out lost.
+		 */
+
+		// One icon per distinct count, not per marker: the markup differs only by
+		// the badge, and DivIcon.createIcon() builds a fresh element per marker
+		// anyway, so sharing an instance between markers of the same count is
+		// safe. Most pins carry one ride, so this is two or three instances no
+		// matter how many places end up on the map.
+		/*
+		 * Pins stay above the tracks because a Path's pane is `overlayPane` (400)
+		 * and a Marker's is `markerPane` (600) — a property of the layer classes,
+		 * not of the order things are added, so do not "tidy" this by reordering
+		 * and assume the stacking follows.
+		 *
+		 * Ink over a light casing, never the accent: the accent is the pin's
+		 * colour, and a track competing with a pin is what brand §5 rules out.
+		 * `interactive: false` is doing real work — without it the paths take
+		 * pointer events, swallow drags meant for the map, and add nothing useful
+		 * to the accessibility tree. The routes are reachable from their pins and
+		 * from /rotas.
+		 */
+		if (tracks.length > 0) {
+			/*
+			 * Colour comes from CSS, not from options. Leaflet writes `color` as a
+			 * `stroke` presentation attribute, which freezes the value read at load;
+			 * switching the OS to dark afterwards then leaves a white casing and an
+			 * almost-black core over inverted tiles. A CSS property beats a
+			 * presentation attribute, so a class lets the tokens stay live — and the
+			 * tile pane's inversion filter does not reach the overlay pane, which is
+			 * precisely why these two have to track the theme themselves.
+			 */
+			const traco = (segmento: [number, number][], variante: 'casing' | 'ink') =>
+				L.polyline(segmento, {
+					className: `sr-track sr-track--${variante}`,
+					weight: variante === 'casing' ? 5 : 2,
+					lineCap: 'round',
+					interactive: false,
+				});
+
+			// Every casing, then every ink. Interleaved per segment, the casing of a
+			// later route paints over the ink of an earlier one, cutting a gap
+			// through it wherever two rides cross.
+			const linhas: L.Polyline[] = [];
+			for (const rota of tracks) for (const seg of rota) linhas.push(traco(seg, 'casing'));
+			for (const rota of tracks) for (const seg of rota) linhas.push(traco(seg, 'ink'));
+
+			/*
+			 * Withdraw the tracks past the zoom where their simplification stops
+			 * being honest. Simplified to 100m, a line is finer than a pixel at
+			 * national zoom but cuts corners across whole blocks by z17. Better to
+			 * take the schematic away than to draw a road where the road is not.
+			 */
+			const ZOOM_MAX_TRACADO = 13;
+			const faixa = L.layerGroup(linhas).addTo(map);
+			map.on('zoomend', () => {
+				const mostrar = map.getZoom() <= ZOOM_MAX_TRACADO;
+				if (mostrar && !map.hasLayer(faixa)) faixa.addTo(map);
+				if (!mostrar && map.hasLayer(faixa)) map.removeLayer(faixa);
+			});
 		}
 
-		const icon = L.divIcon({
-			className: 'sr-pin',
-			html: '<span class="sr-pin__dot"></span>',
-			iconSize: [18, 18],
-			iconAnchor: [9, 9],
-			popupAnchor: [0, -12],
-		});
+		const icones = new Map<number, L.DivIcon>();
+		const iconFor = (count: number): L.DivIcon => {
+			const cached = icones.get(count);
+			if (cached) return cached;
+			const icon = L.divIcon({
+				className: 'sr-pin',
+				html:
+					'<span class="sr-pin__dot"></span>' +
+					(count > 1 ? `<span class="sr-pin__count" aria-hidden="true">${count}</span>` : ''),
+				iconSize: [18, 18],
+				iconAnchor: [9, 9],
+				popupAnchor: [0, -12],
+			});
+			icones.set(count, icon);
+			return icon;
+		};
 
-		pins.forEach((pin, index) => {
+		pins.forEach((pin) => {
 			const marker = L.marker([pin.lat, pin.lng], {
-				icon,
+				icon: iconFor(pin.count),
 				title: pin.name,
-				keyboard: true, // tabbable, Esc closes the popup
+				keyboard: true, // tabbable; Esc is handled on the canvas, see below
 				riseOnHover: true,
 			}).addTo(map);
 
 			const element = marker.getElement();
 			// Leaflet gives a divIcon marker role="button" and the title as its
 			// only name; say what the button is in Portuguese instead.
-			element?.setAttribute('aria-label', `Local: ${pin.name}`);
+			element?.setAttribute(
+				'aria-label',
+				pin.count > 1 ? `Local: ${pin.name}, ${pin.count} voltas` : `Local: ${pin.name}`,
+			);
 
-			const template = templates[index];
+			// Leaflet gives the marker role="button" but only handles Enter. A button
+			// has to take Space too, and without preventDefault Space scrolls the
+			// page out from under the map instead.
+			element?.addEventListener('keydown', (event) => {
+				if (event.key === ' ') {
+					event.preventDefault();
+					marker.openPopup();
+				}
+			});
+
+			const template = popups?.querySelector<HTMLTemplateElement>(
+				`template[data-pin="${pin.index}"]`,
+			);
 			if (template) {
 				marker.bindPopup(template.innerHTML, {
 					// Width belongs to the options, not the stylesheet (§5.4).
@@ -589,21 +958,106 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 			}
 		});
 
-		map.on('popupopen', (event) => {
-			const marker = event.popup.options.autoClose === undefined ? null : null;
-			void marker;
-			const source = (event.popup as unknown as { _source?: L.Marker })._source;
-			source?.getElement()?.classList.add('is-open');
+		/*
+		 * Leaflet's own Escape handling cannot be relied on here. It binds the
+		 * document keydown listener on the map container's `focus` event and
+		 * unbinds it on `blur` — and focus/blur do not bubble, so the moment the
+		 * user tabs from the container to a marker (or into the popup), Leaflet
+		 * has already torn the listener down. With a mouse it works, because
+		 * every mousedown hands focus back to the container; by keyboard, which
+		 * is exactly who needs it, Escape does nothing.
+		 *
+		 * One listener on the canvas instead: keydown from a marker or from a
+		 * link inside the popup bubbles up to it, and closePopup() on nothing is
+		 * a no-op, so it is safe when Leaflet's own handler is also armed.
+		 */
+		canvas.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') map.closePopup();
+		});
 
-			const close = event.popup.getElement()?.querySelector('.leaflet-popup-close-button');
+		/*
+		 * Focus follows the popup. Leaflet never moves it — the popup pane comes
+		 * after the marker pane in the DOM, so opening a popup and pressing Tab
+		 * would take you to the *next pin*, past everything the popup just
+		 * revealed. With several rides in one popup that is up to five tab stops
+		 * of content nobody is told about.
+		 */
+		let pinoAberto: HTMLElement | null = null;
+
+		/*
+		 * Set once focus has actually landed inside the popup, so the close handler
+		 * knows whether it has a reader to hand back to.
+		 *
+		 * Recorded on the way in rather than inspected on the way out, because
+		 * Leaflet fires `popupclose` *after* DivOverlay.onRemove has detached the
+		 * container (leaflet-src.js, Popup.onRemove): by then the element is gone
+		 * and focus has silently fallen to <body>, so asking "was focus inside?" at
+		 * that point always answers no and the pin never gets it back.
+		 *
+		 * Deliberately not a focusin listener: focus events do not fire when the
+		 * window itself is not focused, which makes that version untestable in a
+		 * headless browser and quietly wrong in a background tab. document
+		 * .activeElement is true in both.
+		 */
+		let focoNoPopup = false;
+
+		map.on('popupopen', (event) => {
+			const source = (event.popup as unknown as { _source?: L.Marker })._source;
+			pinoAberto = source?.getElement() ?? null;
+			pinoAberto?.classList.add('is-open');
+
+			const elemento = event.popup.getElement();
+
+			const caixa = elemento?.querySelector<HTMLElement>('.leaflet-popup-content-wrapper');
+			if (caixa) {
+				caixa.setAttribute('role', 'dialog');
+				// The marker already carries "Local: Évora, 2 voltas" — reuse it so
+				// the popup announces which place it belongs to.
+				caixa.setAttribute('aria-label', pinoAberto?.getAttribute('aria-label') ?? 'Local');
+				caixa.tabIndex = -1;
+
+				// autoPan does the scrolling, so the browser's is suppressed inside.
+				focar(caixa, () => (focoNoPopup = true));
+			}
+
+			const close = elemento?.querySelector('.leaflet-popup-close-button');
 			// Leaflet hard-codes an English aria-label on the close button.
 			close?.setAttribute('aria-label', 'Fechar');
 			close?.setAttribute('title', 'Fechar');
 		});
 
 		map.on('popupclose', (event) => {
-			const source = (event.popup as unknown as { _source?: L.Marker })._source;
-			source?.getElement()?.classList.remove('is-open');
+			const pino = pinoAberto;
+			/*
+			 * Ask whether focus is still *inside* the popup, not whether it has
+			 * already fallen to <body>. When this fires the popup is still in the
+			 * document and the focused element is the dialog or a link within it, so
+			 * the old body check was false every time, the restore was skipped, and
+			 * the node was removed a moment later with focus dropping to <body>
+			 * uncaught — Tab then resumed past the pin the reader came from.
+			 */
+			/*
+			 * Two states mean "the reader is still in this popup", because Leaflet
+			 * tears it down differently depending on the animation path — and both
+			 * were observed in a browser:
+			 *
+			 *   fade on  — removal is deferred by a timeout, so the popup is still
+			 *              in the document and still holds focus here;
+			 *   fade off — the container is already detached, so focus has fallen
+			 *              to <body>.
+			 *
+			 * Anything else means they moved on themselves — tabbed to the zoom
+			 * control, clicked another pin — and dragging them back would be rude.
+			 */
+			const dentro = event.popup.getElement()?.contains(document.activeElement) ?? false;
+			const orfao = document.activeElement === document.body || document.activeElement === null;
+			const devolver = focoNoPopup && (dentro || orfao);
+			focoNoPopup = false;
+			pino?.classList.remove('is-open');
+			pinoAberto = null;
+			// Same retry as on open: the pin will not take focus while Leaflet is
+			// still tearing the popup down either.
+			if (devolver) focar(pino);
 		});
 
 		// Loading state, resolved by the tiles rather than by a timer: the map
@@ -618,7 +1072,8 @@ const markers = pins.map(({ name, lat, lng }) => ({ name, lat, lng }));
 			if (painted) return;
 			root.dataset.state = 'error';
 			if (status) {
-				status.textContent = 'Não foi possível carregar o mapa. A lista de locais está aqui em baixo.';
+				status.textContent =
+					'Não foi possível carregar o mapa. As listas de locais e de rotas estão aqui em baixo.';
 				status.removeAttribute('hidden');
 			}
 		};

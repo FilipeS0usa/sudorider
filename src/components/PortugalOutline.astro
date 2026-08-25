@@ -14,10 +14,13 @@
  *
  * Decorative: aria-hidden, with the surrounding text carrying the meaning.
  */
-import type { Local } from '../lib/types';
-
+/*
+ * Coordinates only, rather than Local[]: the homepage passes the *grouped*
+ * pins (src/lib/locais.ts), so the teaser draws the same dots the real map
+ * does. A Local[] still satisfies this structurally.
+ */
 interface Props {
-	locais: Local[];
+	locais: { lat: number; lng: number }[];
 }
 
 const { locais } = Astro.props;

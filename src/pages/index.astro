@@ -23,11 +23,15 @@ import { SITE } from '../components/site';
 import { withBase } from '../lib/url';
 import type { Local, Equipamento, Video } from '../lib/types';
 import locaisData from '../data/locais.json';
+import { agruparLocais } from '../lib/locais';
 import { videos } from '../lib/videos';
 import equipamentoData from '../data/equipamento.json';
 
 // Shorts are excluded — see src/lib/videos.ts.
 const locais = locaisData as Local[];
+// Grouped, because that is what a pin is: two rides filmed in one town share
+// one. Counting raw entries here would promise more dots than the map draws.
+const pinos = await agruparLocais(locais);
 const equipamento = equipamentoData as Equipamento[];
 
 const rotas = (await getCollection('rotas', ({ data }) => !data.draft)).sort(
@@ -37,9 +41,9 @@ const rotas = (await getCollection('rotas', ({ data }) => !data.draft)).sort(
 const ultimo = videos[0];
 const seguintes = videos.slice(1, 4);
 const notaMapa =
-	locais.length === 1
+	pinos.length === 1
 		? 'Por agora é só um ponto. Vão aparecendo à medida que os vídeos saem.'
-		: `De momento são ${locais.length} pontos. Vão aparecendo à medida que os vídeos saem.`;
+		: `De momento são ${pinos.length} pontos. Vão aparecendo à medida que os vídeos saem.`;
 ---
 
 <Base
@@ -75,7 +79,7 @@ const notaMapa =
 	</section>
 
 	{
-		locais.length >= 1 && (
+		pinos.length >= 1 && (
 			<section class="section" aria-labelledby="por-onde-andei">
 				<div class="container">
 					<SectionHeader
@@ -85,11 +89,11 @@ const notaMapa =
 						linkLabel="Ver o mapa"
 					/>
 					<div class="teaser">
-						<PortugalOutline locais={locais} />
+						<PortugalOutline locais={pinos} />
 						<div class="teaser__text">
 							<p>
-								Cada pino é uma volta filmada. O mapa liga o sítio ao vídeo que ali foi
-								gravado.
+								Cada pino é um sítio onde filmei. O mapa liga cada sítio aos vídeos
+								gravados ali.
 							</p>
 							<p class="teaser__note">{notaMapa}</p>
 							<p>

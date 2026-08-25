@@ -17,67 +17,145 @@
 import Base from '../layouts/Base.astro';
 import RideMap from '../components/RideMap.astro';
 import { dataCurta, dataISO, tituloLimpo } from '../components/format';
-import type { Local, Video } from '../lib/types';
+import type { Local } from '../lib/types';
 import locaisData from '../data/locais.json';
-import { videos } from '../lib/videos';
+import { agruparLocais } from '../lib/locais';
+import { tracadosDasRotas } from '../lib/rotas';
+import { withBase } from '../lib/url';
 
 const locais = locaisData as Local[];
 // Shorts are excluded — see src/lib/videos.ts.
 
-const pontos = locais.map((local) => {
-	const video = videos.find((item) => item.id === local.video);
-	return { local, video };
-});
+/*
+ * The same grouping the map uses, from the same module — this list is the text
+ * alternative for the map (WCAG 1.1.1), so if the map shows one pin for Évora
+ * carrying two rides, a flat list of two "Évora" entries would describe a map
+ * that is not there. Sharing src/lib/locais.ts is what keeps that true as the
+ * grouping rules change.
+ */
+const grupos = await agruparLocais(locais);
 
+/*
+ * The routes drawn on the map. Listed here from the same source that draws
+ * them, so the text alternative cannot claim a route the map does not show —
+ * a route whose GPX is missing is skipped by both.
+ */
+const tracados = await tracadosDasRotas();
+
+// Counts pins, not videos: it sits under a map, and what is sparse there is
+// the number of places.
 const nota =
-	locais.length === 1
+	grupos.length === 1
 		? 'Por agora é só um ponto no mapa. Vão aparecendo à medida que os vídeos saem.'
-		: `De momento há poucos pontos no mapa — ${locais.length}. Vão aparecendo à medida que os vídeos saem.`;
+		: `De momento há poucos pontos no mapa — ${grupos.length}. Vão aparecendo à medida que os vídeos saem.`;
 ---
 
 <Base
 	title="Mapa"
-	description="O mapa das voltas do SudoRider. Cada pino é um sítio filmado e liga ao vídeo gravado ali."
+	description="O mapa das voltas do SudoRider. Cada pino é um sítio onde filmei e liga aos vídeos gravados ali."
 >
 	<h1 class="visually-hidden">Mapa</h1>
 
-	<RideMap locais={locais} height="max(26rem, calc(100svh - var(--header-h)))" />
+	<RideMap
+		locais={locais}
+		tracados={tracados}
+		height="max(26rem, calc(100svh - var(--header-h)))"
+	/>
 
 	<div class="container map-strip">
-		<p class="map-strip__lead">
-			Cada pino é uma volta filmada. Carrega num pino para ver o vídeo.
+		{/* id: the map region points here with aria-describedby (WCAG G74). */}
+		<p class="map-strip__lead" id="mapa-alternativa">
+			Cada pino é um sítio onde filmei. Carrega num pino para ver as voltas. As linhas são as
+			rotas publicadas, listadas em baixo.
 		</p>
 
-		{locais.length < 3 && <p class="map-strip__note">{nota}</p>}
+		{grupos.length < 3 && <p class="map-strip__note">{nota}</p>}
 
 		<h2 class="map-strip__heading">Locais</h2>
 
 		<ul class="locais">
 			{
-				pontos.map(({ local, video }) => (
+				grupos.map((grupo) => (
 					<li class="local">
-						<h3 class="local__name">{local.name}</h3>
-						{video && (
-							<p class="local__meta">
-								<time class="u-mono" datetime={dataISO(video.published)}>
-									{dataCurta(video.published)}
-								</time>
-							</p>
-						)}
-						{local.note && <p class="local__note">{local.note}</p>}
-						{video ? (
-							<p>
-								<a href={video.url} rel="noopener">
-									{tituloLimpo(video.title)}
-								</a>
-							</p>
-						) : (
-							<p class="local__note">Sem vídeo associado.</p>
-						)}
+						<h3 class="local__name">
+							{grupo.label}
+							{/* Explicit space: JSX drops the whitespace between these two, and
+							    the badge is inline, so the heading's accessible name would read
+							    "Évora2 voltas". The margin only fixes the visual gap. */}
+							{grupo.voltas.length > 1 && (
+								<>
+									{' '}
+									<span class="local__count">{grupo.voltas.length} voltas</span>
+								</>
+							)}
+						</h3>
+
+						<ul class="voltas">
+							{grupo.voltas.map(({ local, video, rota }) => (
+								<li class="volta">
+									{video && (
+										<p class="local__meta">
+											<time class="u-mono" datetime={dataISO(video.published)}>
+												{dataCurta(video.published)}
+											</time>
+										</p>
+									)}
+									{local.note && <p class="local__note">{local.note}</p>}
+									{/*
+									 * Link out even when videos.json has not caught up: the id is
+									 * enough to build the watch URL, and RideMap's popup does
+									 * exactly this. A pin that offers the video on the map but
+									 * says "sem vídeo" in the text alternative describes a
+									 * different map to anyone reading the list instead (1.1.1).
+									 */}
+									<p>
+										<a
+											href={video?.url ?? `https://www.youtube.com/watch?v=${local.video}`}
+											rel="noopener"
+										>
+											{video ? tituloLimpo(video.title) : 'Ver o vídeo no YouTube'}
+										</a>
+									</p>
+									{rota && (
+										<p class="volta__rota">
+											{/* Same reason as the popup: with several rides at one
+											    place these links would all be named "Ver a rota". */}
+											<a href={withBase(`/rotas/${rota.slug}`)}>
+												Ver a rota
+												{grupo.voltas.length > 1 && (
+													<span class="visually-hidden">: {rota.title}</span>
+												)}{' '}
+												— {rota.distanceKm} km
+											</a>
+										</p>
+									)}
+								</li>
+							))}
+						</ul>
 					</li>
 				))
 			}
 		</ul>
+
+		{
+			tracados.length > 0 && (
+				<>
+					<h2 class="map-strip__heading">Rotas no mapa</h2>
+					<p class="map-strip__note">
+						As linhas no mapa são as rotas publicadas. Cada uma tem a sua página, com o
+						traçado completo e o ficheiro GPX para descarregar.
+					</p>
+					<ul class="rotas-mapa">
+						{tracados.map((rota) => (
+							<li>
+								<a href={withBase(`/rotas/${rota.slug}`)}>{rota.title}</a>{' '}
+								<span class="u-mono rotas-mapa__km">{rota.distanceKm} km</span>
+							</li>
+						))}
+					</ul>
+				</>
+			)
+		}
 	</div>
 </Base>
 
@@ -125,10 +203,56 @@ const nota =
 		font-weight: 600;
 	}
 
+	.rotas-mapa {
+		display: grid;
+		gap: var(--sr-space-2);
+		margin-block-start: var(--sr-space-4);
+		padding: 0;
+		list-style: none;
+	}
+
+	.rotas-mapa__km {
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-sm);
+	}
+
+	.local__count {
+		margin-inline-start: var(--sr-space-2);
+		color: var(--sr-fg-muted);
+		font-size: var(--sr-text-2xs);
+		font-weight: 400;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
 	.local__meta,
 	.local__note {
 		font-size: var(--sr-text-sm);
 		color: var(--sr-fg-muted);
+	}
+
+	/* The rides at one place. A single ride shows no divider, so a place with
+	   one video reads exactly as it did before the grouping. */
+	.voltas {
+		display: grid;
+		gap: var(--sr-space-4);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.volta {
+		display: grid;
+		gap: var(--sr-space-2);
+	}
+
+	.volta + .volta {
+		padding-block-start: var(--sr-space-4);
+		border-block-start: 1px solid var(--sr-border);
+	}
+
+	.volta__rota {
+		font-size: var(--sr-text-sm);
 	}
 
 	@media (min-width: 36rem) {

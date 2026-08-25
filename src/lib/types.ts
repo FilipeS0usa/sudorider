@@ -20,6 +20,12 @@ export interface Local {
 	name: string;
 	lat: number;
 	lng: number;
+	/**
+	 * Country, when it is not SITE.paisPredefinido. Two places can share a name
+	 * across borders, so this is part of what makes a pin distinct — not just a
+	 * label.
+	 */
+	country?: string;
 	/** YouTube video id filmed here. A pin exists to link a place to a video. */
 	video: string;
 	/** Optional one-liner for the popup. */
