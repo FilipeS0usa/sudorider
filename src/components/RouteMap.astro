@@ -14,8 +14,8 @@
  * is the thing docs/brand.md §5 specifically rules out.
  */
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { parseGpx, simplifyTrack, decimate, trackLengthKm } from '../lib/gpx';
+import { caminhoGpx } from '../lib/rotas';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -29,22 +29,18 @@ const { gpx, height = '320px' } = Astro.props;
 const CSS_LENGTH = /^[\w%.\s()+*/,-]+$/;
 const mapHeight = CSS_LENGTH.test(height) ? height : '320px';
 
-/**
- * Frontmatter is authored by hand, so treat the filename as untrusted: take the
- * basename only. Without this, `gpx: "../../../etc/passwd"` reads outside
- * public/gpx at build time.
- */
-const safeName = gpx.replace(/^.*[\\/]/, '');
+// The basename guard lives in src/lib/rotas.ts, shared with the overview map.
+const caminho = caminhoGpx(gpx);
 
 let segments: number[][][] = [];
 let distanceKm = 0;
 let problem: string | null = null;
 
-if (!safeName.endsWith('.gpx')) {
+if (!caminho) {
 	problem = 'Ficheiro de traçado inválido.';
 } else {
 	try {
-		const xml = readFileSync(resolve(process.cwd(), 'public/gpx', safeName), 'utf8');
+		const xml = readFileSync(caminho, 'utf8');
 		const track = parseGpx(xml);
 
 		if (track.segments.length === 0) {
@@ -133,6 +129,15 @@ const pointCount = segments.reduce((n, s) => n + s.length, 0);
 		filter: var(--sr-map-tiles);
 	}
 
+	/* Live tokens rather than a stroke baked in at load — see the drawing code. */
+	.sr-routemap :global(.sr-track--casing) {
+		stroke: var(--sr-map-track-casing);
+	}
+
+	.sr-routemap :global(.sr-track--ink) {
+		stroke: var(--sr-map-track);
+	}
+
 	.sr-routemap :global(.leaflet-control-attribution) {
 		background: var(--sr-bg-surface);
 		color: var(--sr-fg-muted);
@@ -168,10 +173,6 @@ const pointCount = segments.reduce((n, s) => n + s.length, 0);
 		}
 	}
 
-	function styleOf(name: string, fallback: string): string {
-		return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-	}
-
 	function build(root: HTMLElement) {
 		const segments = readTrack(root);
 		if (segments.length === 0) return;
@@ -185,16 +186,33 @@ const pointCount = segments.reduce((n, s) => n + s.length, 0);
 
 		L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 18 }).addTo(map);
 
-		const casing = styleOf('--sr-map-track-casing', 'rgba(255,255,255,.75)');
-		const ink = styleOf('--sr-map-track', '#1B1A18');
-
-		const lines: L.Polyline[] = [];
+		/*
+		 * Colour by class, not by `color:`. Leaflet writes that option out as a
+		 * `stroke` presentation attribute, which freezes whatever the tokens said
+		 * at load — switch the OS to dark afterwards and the track keeps its light
+		 * theme while the tiles invert underneath it. A CSS property beats a
+		 * presentation attribute, so the tokens stay live. The tile pane's
+		 * inversion filter never reaches the overlay pane, which is exactly why
+		 * these have to follow the theme themselves.
+		 *
+		 * Casings first, then inks: interleaved, a later casing paints over an
+		 * earlier ink and cuts a gap through it wherever the track crosses itself.
+		 */
 		for (const segment of segments) {
-			// Casing first, track over it: a light halo keeps an ink line legible
-			// against dark tiles without the line itself changing colour.
-			L.polyline(segment, { color: casing, weight: 7, opacity: 1, lineCap: 'round' }).addTo(map);
-			lines.push(L.polyline(segment, { color: ink, weight: 3, opacity: 1, lineCap: 'round' }).addTo(map));
+			L.polyline(segment, {
+				className: 'sr-track sr-track--casing',
+				weight: 7,
+				lineCap: 'round',
+			}).addTo(map);
 		}
+
+		const lines: L.Polyline[] = segments.map((segment) =>
+			L.polyline(segment, {
+				className: 'sr-track sr-track--ink',
+				weight: 3,
+				lineCap: 'round',
+			}).addTo(map),
+		);
 
 		const group = L.featureGroup(lines);
 		map.fitBounds(group.getBounds(), { padding: [24, 24] });

@@ -10,7 +10,9 @@ import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import RouteMap from '../../components/RouteMap.astro';
 import { withBase } from '../../lib/url';
-import { dataLonga, dataISO } from '../../components/format';
+import { idsDeVideo } from '../../lib/rotas';
+import { videos } from '../../lib/videos';
+import { dataLonga, dataISO, tituloLimpo } from '../../components/format';
 
 export async function getStaticPaths() {
 	const rotas = await getCollection('rotas', ({ data }) => !data.draft);
@@ -21,7 +23,17 @@ const { rota } = Astro.props;
 const { Content } = await render(rota);
 const d = rota.data;
 
-const videoUrl = d.video ? `https://www.youtube.com/watch?v=${d.video}` : null;
+/*
+ * A ride can be published as several videos. The id is enough to build a
+ * working watch URL, so a video the daily sync has not delivered yet still gets
+ * a link — it just has no title to show.
+ */
+const porId = new Map(videos.map((video) => [video.id, video]));
+const videosDaRota = idsDeVideo(d.video).map((id) => ({
+	id,
+	url: porId.get(id)?.url ?? `https://www.youtube.com/watch?v=${id}`,
+	title: porId.get(id) ? tituloLimpo(porId.get(id)!.title) : '',
+}));
 ---
 
 <Base title={d.title} description={d.summary}>
@@ -53,7 +65,26 @@ const videoUrl = d.video ? `https://www.youtube.com/watch?v=${d.video}` : null;
 			<a class="btn btn--primary" href={withBase(`gpx/${d.gpx}`)} download>
 				Descarregar o traçado (GPX)
 			</a>
-			{videoUrl && <a class="btn" href={videoUrl}>Ver o vídeo desta rota</a>}
+			{
+				/*
+				 * One video keeps the plain label. Several are numbered rather than
+				 * called "Parte N": the numbering is ours, and only the author's
+				 * titles know whether these are parts, angles or a re-cut. The title
+				 * goes in a visually-hidden suffix so the buttons are still told
+				 * apart in a screen reader's list, with the visible words as the
+				 * prefix (2.5.3).
+				 */
+				videosDaRota.map((video, indice) => (
+					<a class="btn" href={video.url}>
+						{videosDaRota.length === 1
+							? 'Ver o vídeo desta rota'
+							: `Ver o vídeo ${indice + 1} de ${videosDaRota.length}`}
+						{videosDaRota.length > 1 && video.title && (
+							<span class="visually-hidden">: {video.title}</span>
+						)}
+					</a>
+				))
+			}
 			<a class="btn" href={withBase('rotas')}>Todas as rotas</a>
 		</footer>
 	</article>

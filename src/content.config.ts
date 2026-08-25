@@ -19,8 +19,12 @@ const rotas = defineCollection({
 		distanceKm: z.number().positive(),
 		/** Filename inside public/gpx/, e.g. "evora-monsaraz.gpx". */
 		gpx: z.string().endsWith('.gpx'),
-		/** YouTube video id for the ride, when one exists. */
-		video: z.string().optional(),
+		/**
+		 * YouTube video id(s) for the ride. A list when one ride was published as
+		 * several videos ("Parte 1", "Parte 2") — every one of them then links
+		 * back to this route, and a map pin for any of them offers it.
+		 */
+		video: z.union([z.string(), z.array(z.string())]).optional(),
 		/** One or two sentences, used on cards and in meta description. */
 		summary: z.string(),
 		/** Hide from the index without deleting the file. */
