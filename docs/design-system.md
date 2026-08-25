@@ -650,6 +650,10 @@ Distance and region are the reason someone clicks, so they outrank the prose.
   point). Draw with `fill: none; stroke: var(--color-accent); stroke-width: 2;
   stroke-linecap: round; vector-effect: non-scaling-stroke` on a `--color-surface-2` field. Every
   route then has a distinctive shape, in theme colours, at ~2KB.
+  **Status:** built. `trackToSvgPath()` in `src/lib/gpx.ts` does exactly this — equirectangular
+  projection at the track's mid-latitude, uniform fit to the viewBox, Ramer–Douglas–Peucker to
+  roughly a pixel of the finished sketch, then a hard cap. It is not yet wired into `RouteCard`,
+  which still renders the fallback below.
 - Fallback when there is no GPX: drop the sketch entirely and promote the meta row to `--fs-500`.
   Do **not** substitute a grey placeholder box.
 - `.r-card__num` uses `--font-mono` with `font-variant-numeric: tabular-nums` so distances align
@@ -686,7 +690,8 @@ Gear is a reference list, not a shop. No prices, no buy links, no star ratings �
 
 ### 5.4 Map popup (Leaflet)
 
-Content, 240px wide:
+A pin is a **place**, and a place can carry more than one ride — so the popup has two forms. One
+ride, 240px wide:
 
 ```
 ┌────────────────────────────┐
@@ -696,12 +701,45 @@ Content, 240px wide:
 │  Serra da Arrábida         │  place name — --fs-300 / --fw-semibold / --font-display
 │  16 ago 2026               │  --fs-100 / muted
 │  Um Ano de Mota, Zero…     │  video title, clamped to 2 lines, --fs-200
-│  Ver o vídeo →             │  --color-accent, --fw-medium
+│  Ver o vídeo →  Ver a rota →│ actions row — --color-accent, --fw-medium
 └────────────────────────────┘
 ```
 
-The whole popup is a single `<a>` to the video; the thumbnail carries `alt=""` and the accessible
-name comes from the place + title text.
+Two or more rides at the same place — compact rows, so the popup stays a popup:
+
+```
+┌────────────────────────────┐
+│  Évora            2 voltas │  header — place + count, --fs-100 / muted
+├────────────────────────────┤
+│ ┌────┐ 23 ago 2026         │  72px thumbnail | text, --fs-100 title
+│ │thmb│ Volta pelos arredo…  │
+│ └────┘ Ver o vídeo → Ver a rota →│
+├────────────────────────────┤
+│ ┌────┐ 16 ago 2026         │
+│ │thmb│ Um Ano de Mota, Ze…  │
+│ └────┘ Ver o vídeo →        │  no route write-up for this one
+└────────────────────────────┘
+```
+
+Newest first. A ride whose video has not reached `videos.json` yet sorts to the top and renders
+with **no thumbnail at all** — the id gives a working watch URL, but the thumbnail would 404, and
+a broken image in a compact row reads worse than none.
+
+**The popup is a container with a row of links, not a single `<a>`.** An earlier version of this
+spec made the whole popup one anchor to the video. It cannot stay that way now the popup offers
+the route write-up as well: an anchor inside an anchor is not valid HTML, and a stretched link
+over the card would swallow the second action. The thumbnail still carries `alt=""` — the title
+sits next to it.
+
+Where a popup lists several rides, the action links repeat, and `Ver o vídeo` × 3 in a screen
+reader's link list is useless. Append the video or route title in a `.visually-hidden` span, and
+keep the visible words as the prefix so the visible label remains a subsequence of the accessible
+name (2.5.3).
+
+Cap the list at `max-block-size: 16rem` with `overflow-y: auto` and `overscroll-behavior:
+contain`. A popup that grows past the top of the map takes its close button out of reach. Do not
+add `tabindex` to that scroll container: every row contains links, so it is already reachable, and
+a `tabindex="0"` would only add a tab stop with no accessible name.
 
 ```css
 .leaflet-popup-content-wrapper { background: var(--color-surface); color: var(--color-text);
@@ -727,9 +765,27 @@ an inline width onto `.leaflet-popup-content` and a CSS rule would need `!import
 .leaflet-marker-icon:focus-visible .pin { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 ```
 
-Give every marker an accessible name — `L.marker(latlng, { title: nome, alt: `Local: ${nome}` })`
-— and keep Leaflet's default `keyboard: true` so pins are tabbable. Active pin: `scale(1.15)`,
-`--color-accent-hover` (guarded by reduced-motion).
+Give every marker an accessible name — `Local: ${nome}`, plus the ride count when it carries more
+than one — and keep Leaflet's default `keyboard: true` so pins are tabbable. Active pin:
+`scale(1.15)`, `--color-accent-hover` (guarded by reduced-motion).
+
+A pin carrying several rides shows a small count badge. Its colours must be **literal**, like the
+pin's own ink stroke: the badge sits in the marker pane, which the dark-mode tile filter never
+touches, so a semantic surface token would invert underneath it and leave ink on ink.
+
+**Focus moves cost more than one line.** A `focus()` on a popup that Leaflet is still opening is a
+silent no-op, for longer when animations are off, so it has to retry across frames. And whether
+focus was inside must be recorded when it lands, not read at `popupclose` — by then Leaflet may
+already have detached the container. Verify any change to this in a browser, in **both** motion
+modes: the two paths fail in opposite directions.
+
+**Keyboard behaviour has to be implemented, not assumed.** Leaflet binds its document `keydown`
+listener on the container's `focus` event and unbinds it on `blur`, and neither event bubbles — so
+by the time a user has tabbed to a pin, Escape no longer closes anything. Keep one `keydown`
+listener on the map canvas instead. Leaflet also never moves focus, and the popup pane comes after
+the marker pane in the DOM, so an opened popup must take focus itself (`role="dialog"`,
+`tabindex="-1"`, labelled from the marker) and hand it back to the pin on close. Without that,
+tabbing out of a fresh popup skips everything it just revealed and lands on the next pin.
 
 **Dark theme tiles** without a second tile host:
 
@@ -743,9 +799,30 @@ The filter applies to the tile pane only, so attribution, controls and pins keep
 colours. OSM attribution is required and must remain legible in both themes — style
 `.leaflet-control-attribution` with `--color-surface` at 90% opacity and `--fs-100`.
 
-**Known limitation:** without a clustering plugin, pins within a few km overlap at national zoom.
-Mitigate in the data (`locais.json`) rather than in code — nudge coincident coordinates by
-~0.002°, and set `autoPanPadding: [24, 24]` so popups near an edge pan into view.
+**Panning limits: there are none, deliberately.** `minZoom: 2` reaches a world view, and there is
+no `maxBounds` — do not add one. A box around the pins makes the map claim there is nothing past
+the places already filmed; a box around the *world* is no better, because seeing the whole world
+means the world is smaller than the viewport, which is exactly when Leaflet's `_panInsideMaxBounds`
+recentres on `moveend`. `maxBoundsViscosity` does not help: it caps how far a drag travels, never
+the spring-back. Panning can therefore run past the edge of the map, which `noWrap: true` on the
+tile layer keeps as grey rather than a repeated world. The *opening* view is still `fitBounds` over
+the pins and tracks — the world is where you may go, not where you land.
+
+**Never set a track's colour through Leaflet's `color` option.** It is written out as a `stroke`
+presentation attribute, freezing whatever the tokens said at load, so switching the OS to dark
+afterwards leaves a light casing over inverted tiles. Give the polyline a `className` and set
+`stroke` in CSS — a CSS property beats a presentation attribute. The tile pane's inversion filter
+does not reach the overlay pane, which is why tracks must follow the theme themselves. Draw every
+casing first and every ink second, not casing-then-ink per segment: interleaved, a later casing
+paints over an earlier ink and cuts a gap through it wherever two routes cross.
+
+**Overlap.** Rides sharing a place name *and country* are merged into one pin
+(`src/lib/locais.ts`), which is
+what stops two videos filmed in the same town from stacking one marker on top of another. That
+leaves the case of *differently named* places within a few km — "Évora" and "Sé de Évora" — which
+still overlap at national zoom and are not worth a clustering plugin for. Mitigate those in the
+data: nudge coincident coordinates by ~0.002°, and keep `autoPanPadding: [24, 24]` so popups near
+an edge pan into view.
 
 ### 5.5 Page header
 
@@ -902,8 +979,8 @@ four lines or a third button appears, the poster falls below the fold and the pa
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Por onde andei                                              Ver o mapa →    │
 │      ┌──────┐                                                                │
-│      │  ▓▓  │   Cada pino é uma volta filmada. O mapa liga o sítio ao        │
-│      │ ▓▓▓  │   vídeo que ali foi gravado.                                   │
+│      │  ▓▓  │   Cada pino é um sítio onde filmei. O mapa liga cada sítio    │
+│      │ ▓▓▓  │   aos vídeos gravados ali.                                     │
 │      │ ▓▓▓  │                                                                │
 │      │  ▓▓  │   [ Abrir o mapa ]                                             │
 │      └──────┘                                                                │
@@ -1065,9 +1142,28 @@ header.
 `svh` (small viewport height), not `vh` — on iOS `100vh` sits under the collapsing browser chrome
 and pushes the zoom controls off screen.
 
+**Route tracks.** The map draws every published route's GPX as a line under the pins — ink over a
+light casing, `interactive: false`, in the overlay pane so markers stay above it. Simplify for the
+zoom the map is actually used at: 100m tolerance, which is finer than a pixel nationally and about
+3KB for a 130km route. That honesty has a ceiling — at z13 the error is ~7px and by z16 it is a
+corner cut across a whole block — so the tracks are removed above **z13** rather than left to draw
+a road where the road is not. Share the point budget across a route's segments rather than applying it to
+each — a GPX with recording pauses in it otherwise buys one budget per pause. A linear route is the
+case this exists for; a pin alone puts a 130km ride and a 5km loop at the same dot. The initial
+`fitBounds` is computed over pins *and* track points, so a route running away from its pin cannot
+start off screen. (The pannable box is not: it is the whole world — see §5.4.)
+
 Below the map, **outside** the viewport-height block, a short `.container` strip:
 
-- One line of framing: *"Cada pino é uma volta filmada. Carrega num pino para ver o vídeo."*
+- One line of framing: *"Cada pino é um sítio onde filmei. Carrega num pino para ver as voltas.
+  As linhas são as rotas publicadas, listadas em baixo."* — a pin is a place, and a place can carry
+  several rides (§5.4), so neither line here nor the teaser on `/` may promise one video per pin.
+  The sentence carries an `id` that the map region points at with `aria-describedby`: it is the
+  short description that says where the long one lives (WCAG G74), so the map's own `aria-label`
+  and this line have to keep describing the same map — routes included.
+- **"Locais" comes before "Rotas no mapa".** The locations list is the map's text alternative, and
+  a whole section wedged between a widget and its alternative pushes them apart for exactly the
+  readers relying on the alternative.
 - The near-empty note from §5.8 when there are fewer than 3 pins.
 - **A `<noscript>` list of every place** — name, date, link to the video. This is not a nicety:
   it is the only content on this page for users without JS, and it makes the page's information
@@ -1080,6 +1176,13 @@ initial view fitted to the pins' bounds with `padding: [40, 40]`, `maxZoom: 16`.
 tabbable, `Esc` closes popups (Leaflet default).
 
 ### 6.6 `/rotas` — Rotas (index) and `/rotas/[slug]`
+
+**A route may belong to more than one video.** `video` in the frontmatter takes an id or a list of
+them, so a ride split across "Parte 1" and "Parte 2" links back from both. One video keeps the
+plain *"Ver o vídeo desta rota"* button; several are numbered — *"Ver o vídeo 1 de 2"* — with the
+video's title in a `.visually-hidden` suffix so the buttons are distinguishable in a screen
+reader's list while the visible words stay the label's prefix (2.5.3).
+
 
 **Index at launch (0 routes):** the page header, then the `.empty` panel from §5.8. That is the
 whole page. It is short, it is honest, and it tells a visitor what to expect.
@@ -1286,75 +1389,106 @@ forcing line-height 1.5, letter-spacing 0.12em, word-spacing 0.16em, paragraph s
 **Reduced motion** — §7.
 
 **Not shipped, deliberately:** no ARIA on `<details>` (§4.3), no `role` attributes on semantic
-elements, no `tabindex` above 0, no live regions. The static-first design means there is nothing
-dynamic to announce.
+elements, no `tabindex` above 0. The static-first design means almost nothing is dynamic.
+
+The map is the exception, and it needs two things this section originally ruled out. Its popup
+takes `role="dialog"` and manages focus (§5.4). And its loading and error states — "A carregar o
+mapa…" becoming "Não foi possível carregar o mapa." — currently change with no announcement at
+all; that one is a **known gap**, not a decision. The fix is a permanent `role="status"` whose
+text content changes, rather than toggling `hidden`, which screen readers announce
+inconsistently.
 
 ---
 
 ## 10. Implementation map
 
-Files this specification implies. Nothing here exists yet.
+What was actually built. It differs from the file split this spec first sketched — noted where it
+matters, so the difference reads as a decision rather than a drift.
 
 ```
 src/styles/
   tokens.css        §1–2   custom properties, light + dark blocks
-  base.css          reset, element defaults, .prose, .flow, focus ring, reduced motion
-  layout.css        §3     .container .section .cards .stack .skip
-  components.css    §5     .v-card .r-card .g-item .btn .tag .empty .site-header .site-footer
-  leaflet.css       §5.4   Leaflet overrides — imported only by the two map-bearing pages
+  global.css        reset, element defaults, .prose, layout primitives, focus ring,
+                    reduced motion, .visually-hidden — the base/layout/components split
+                    this spec proposed was more files than the CSS justified
 
 src/layouts/
   Base.astro        html/head/meta/theme-color, header + main + footer, skip link
   Page.astro        Base + page header block (§5.5) + .container
 
 src/components/
-  Nav.astro                 §4    the seven links, details/summary
-  VideoCard.astro           §5.1  props: video, format, variant="grid"|"stack"|"hero"
+  Header.astro              §4    wordmark + the seven links, details/summary
+  Footer.astro              §5.6
+  VideoCard.astro           §5.1
   VideoList.astro           §3.3  count-aware wrapper (empty / stack / 2×2 / grid)
   RouteCard.astro           §5.2
   GearItem.astro            §5.3
   EmptyState.astro          §5.8
-  PortugalOutline.astro     §6.1  static SVG teaser
   SectionHeader.astro       §5.7
-  Footer.astro              §5.6
+  PortugalOutline.astro     §6.1  static SVG teaser
+  Icon.astro
+  RideMap.astro             §5.4  the pin map — Leaflet in a bottom <script>, popups as
+                                  <template> elements
+  RouteMap.astro            §6.6  one GPX track — parsed at build, coordinates baked in
+  format.ts                 dataCurta/dataLonga/mesAno/dataISO, tituloLimpo,
+                            paragrafoInicial — this spec called it src/lib/video.ts
+  site.ts                   site-wide constants (email, socials)
 
 src/lib/
-  video.ts          cleanTitle(), leadParagraph(), formatDate(), isShort()
-  gpx.ts            build-time GPX → normalised SVG polyline (§5.2)
+  types.ts          Video, Local, Equipamento
+  videos.ts         the video list every page reads through; Shorts filtered here
+  locais.ts         §5.4   map pins grouped by place, shared by the map and its text list
+  rotas.ts          routes indexed by video id (so a pin can offer "ver a rota"), the
+                    build-time track reader for the overview map, and the shared
+                    basename guard for GPX filenames out of frontmatter
+  gpx.ts            §5.2   GPX parse, distance, simplify, SVG projection
+  url.ts            withBase()
 ```
 
-`leaflet.css` stays out of the global bundle: only `/mapa` and `/rotas/[slug]` import it, so five
-of the seven pages ship no map CSS at all.
+Leaflet's stylesheet stays out of the global bundle, but by a simpler route than a `leaflet.css`
+of overrides: `RideMap` and `RouteMap` each `import 'leaflet/dist/leaflet.css'` and carry their own
+overrides in a scoped `<style>`. Astro then ships it only on the two pages that render a map, so
+five of the seven pages carry no map CSS at all — the outcome this spec asked for.
 
 ---
 
-## 11. Open handoffs
+## 11. Handoffs
 
-Things this spec depends on that belong to someone else. Each is a decision, not a detail.
+Things this spec depended on that belonged to someone else. Most are now settled; what is left is
+listed first.
 
-1. **Brand Guardian — the token contract (§1.1).** Every name in that table must exist, with the
-   stated contrast ratios. The two that most often get missed: `--color-text-muted` must hit 4.5:1
-   on `--color-surface` as well as `--color-bg`, and `--color-focus` needs to work in both themes
-   (accent frequently fails this in dark mode).
-2. **Brand Guardian — diacritic coverage.** Any Google Font chosen must ship
-   `ç ã õ á é í ó ú â ê ô à` in every weight used. Subset to `latin` + `latin-ext`, `display=swap`,
-   `preconnect` to `fonts.gstatic.com`, and ≤ 2 families / ≤ 4 files total.
-3. **Frontend / DevOps — Shorts detection (§5.1).** `videos.json` cannot express it today.
-   Preferred fix is a resolve-at-sync-time check in `scripts/sync-videos.mjs`; fallback is a
-   separate `video-formats.json` override map. This spec does not touch either file.
-4. **Frontend — verify the lazy-iframe facade** issues zero third-party requests with cards closed,
-   in all three engines. Bounded fallback documented in §5.1.
-5. **Web GIS — `locais.json` shape.** This spec's popup and teaser assume
-   `{ id, nome, lat, lon, video, data, regiao }`. `video` must be a valid id present in
-   `videos.json` — per CLAUDE.md, a pin without one is a bug, so validate at build and fail loudly.
-6. **Web GIS — GPX → SVG sketch (§5.2).** Build-time only. If it is not built, route cards fall
-   back to the meta-only variant; do not ship a grey placeholder.
-7. **Cartography — track and tile styling** within the constraints in §5.4 and §6.6 (accent track
-   with a casing; the dark-mode tile filter applies to `.leaflet-tile-pane` only).
-8. **Content — the homepage hero sentence.** It has a hard budget: **three lines at 390px**
-   (~110 characters). The draft *"Sou o Filipe. Ando numa CFMOTO 450 MT — a Dora — por Portugal e
-   por onde a estrada levar."* is 96 characters and fits. Anything longer pushes the latest video
-   below the fold and breaks §6.1.
+### Still open
+
+1. **Frontend — wire the GPX sketch into `RouteCard` (§5.2).** `trackToSvgPath()` is built and
+   tested. Until the card uses it, the routes index renders the meta-only fallback — correct, but
+   it is the sketch that makes the card worth looking at.
+2. **Frontend — verify the lazy-iframe facade** issues zero third-party requests with cards
+   closed, in all three engines. Bounded fallback documented in §5.1.
+3. **Accessibility — the map's loading and error states** change with no announcement (§9). Needs
+   a permanent `role="status"` rather than a toggled `hidden`.
+
+### Settled
+
+4. **The token contract (§1.1)** — `src/styles/tokens.css`. Note the map's pin stroke and count
+   badge are deliberately **literal** colours, not semantic tokens: they render in the marker
+   pane, which the dark-mode tile filter does not touch, so a theme-flipping token would leave
+   them invisible in one theme.
+5. **Diacritic coverage** — IBM Plex Sans (400/600) and IBM Plex Mono (400), `display=swap`, with
+   `preconnect` to both Google Fonts hosts. Two families, three files.
+6. **Shorts detection (§5.1)** — resolved at sync time by probing `youtube.com/shorts/<id>`, which
+   answers definitively where the feed cannot. The flag lands in `videos.json`; the *filter* lives
+   in `src/lib/videos.ts`, so excluding Shorts from the site is one line to undo.
+7. **`locais.json` shape** — settled as `{ name, lat, lng, video, note?, country? }`, not the
+   `{ id, nome, lat, lon, video, data, regiao }` this spec originally assumed: date and title come
+   from `videos.json` via the video id rather than being restated, and there is no region field
+   because nothing displays one. `country` is omitted at home and carries the country otherwise;
+   it is part of the grouping key, not just a label, so two places sharing a name across a border
+   stay two pins. Validation happens in `src/lib/locais.ts` and fails the build loudly, as asked.
+8. **GPX → SVG sketch** — built (`src/lib/gpx.ts`), pending the wiring in item 1.
+9. **Track and tile styling** — done, with one deviation worth knowing: the route track is drawn
+   in **ink over a light casing**, not in the accent. The accent belongs to pins, and a track
+   competing with a pin is what §5 rules out.
+10. **The homepage hero sentence** — shipped as drafted, 96 characters.
 
 ---
 

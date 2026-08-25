@@ -13,9 +13,10 @@ This repository holds the source for the project's website, published to GitHub 
 
 ## Status
 
-🚧 **Scaffolded, not built.** The channel launched in August 2026; the site is being built
-alongside it. Astro is installed and building with a placeholder homepage — the seven pages, the
-map, the route collection and the workflows below are still to come.
+**Built and deploying.** The channel launched in August 2026 and the site went up alongside it.
+All seven pages, the design system, both maps, the route collection, the GPX reader and both
+workflows are in place. What is thin is content: the route write-ups and the map pins fill in as
+videos come out.
 
 ## What the site is for
 
@@ -57,39 +58,62 @@ authentication, and carries everything the listing needs — id, title, publish 
 **Why not Mapbox or Google Maps:** both want an account, a key, and a credit card on file.
 Leaflet with OpenStreetMap tiles has none of those requirements.
 
-## Planned structure
+## Structure
 
 ```
 .github/workflows/
-  deploy.yml           # build + publish to GitHub Pages
-  sync-videos.yml      # scheduled: refresh src/data/videos.json from the channel RSS feed
+  deploy.yml           # reusable: build + publish to GitHub Pages
+  sync-videos.yml      # scheduled: refresh videos.json, then call deploy.yml
+scripts/
+  sync-videos.mjs      # reads the channel RSS feed; merges, never overwrites
 src/
   pages/               # index, sobre, videos, equipamento, mapa, rotas, contacto
-  layouts/             # shared page shell — nav, footer, meta tags
-  components/          # VideoCard, RideMap, RouteCard, …
+  layouts/             # Base (document shell) and Page (header + container)
+  components/          # VideoCard, RideMap, RouteMap, RouteCard, GearItem, …
   content/
-    rotas/             # one Markdown file per route
+    rotas/             # one Markdown file per route (_template.md is not published)
   data/
     videos.json        # generated — do not hand-edit
     locais.json        # map pins: coordinates + the video each one links to
     equipamento.json   # gear list
-  styles/
+  lib/
+    videos.ts          # the video list every page reads through (Shorts filtered here)
+    locais.ts          # map pins grouped by place — shared by the map and its text list
+    rotas.ts           # routes by video id, the track reader for the map, the GPX name guard
+    gpx.ts             # GPX parser, distance, simplification, SVG projection
+    url.ts             # withBase() — the single switch if the site leaves the root
+  styles/              # tokens.css (custom properties) + global.css
 public/
   gpx/                 # route tracks
-  img/
+  CNAME                # the custom domain — deleting this drops it on the next deploy
 ```
+
+`docs/` holds the two specifications the build was written against — `brand.md` and
+`design-system.md`. `CLAUDE.md` records the decisions that override them.
 
 ## Content workflows
 
 **Publishing a route** — write `src/content/rotas/<slug>.md` with frontmatter (title, date,
-distance, region, the GPX filename, and the related video id), then drop the track into
-`public/gpx/`. The route page, the routes index, and the map pick it up on the next build.
+distance, region, the GPX filename, and the related video id — or a list of ids, if the ride was
+published as several videos), then drop the track into `public/gpx/`. The filename becomes the
+URL, so name it after the place rather than the episode number. The route page, the routes index, and the map pick it up on the next build — the
+track is drawn on `/mapa` as well as on the route's own page, so a linear ride reads as the road
+it was rather than as a dot at one end.
 
 **Adding a video** — nothing to do. The scheduled workflow reads the channel's RSS feed and
 commits `videos.json` when something new appears.
 
 **Adding a map pin** — add an entry to `locais.json` with coordinates, a label, and the video id
-it should link to.
+it should link to. Give it the same name as an existing pin and the two share one pin on the map,
+listing both rides — that is how a second ride in a town you have already filmed is added. If a
+route write-up points at the same video, the pin offers a link to it automatically; there is no
+route field to fill in. The build refuses entries with no video id, non-numeric coordinates, or a
+shared name across places tens of km apart.
+
+For a ride outside Portugal, add `"country": "Espanha"`. The country shows in the label and is
+part of what makes a pin distinct, so two places sharing a name across a border stay two pins.
+Leave it out at home — `SITE.paisPredefinido` in `src/components/site.ts` fills it in, and a pin
+whose country is the default one shows no country at all.
 
 **Adding gear** — add an entry to `equipamento.json`.
 
@@ -117,13 +141,15 @@ No manual deploy step.
 
 ## Open decisions
 
-- **Contact form** — GitHub Pages is static and cannot send email. Either a plain `mailto:` link
-  (zero setup, exposes the address to scrapers) or a third-party form service such as Formspree
-  or Web3Forms (needs an account, free tier is limited). Not yet decided.
 - **DNS for `sudorider.com`** — the domain is decided and `public/CNAME` is in place, but the DNS
   records and the repository's Pages *Custom domain* setting still need configuring before a
   deploy will serve correctly.
-- **Visual direction** — undecided beyond *simple and clean*.
+- **Route card track sketches** — `src/lib/gpx.ts` can project a GPX track to an inline SVG path
+  at build time, but `RouteCard` still renders the meta-only fallback. Connecting it is what makes
+  the routes index worth looking at.
+
+Settled since the first draft: contact is a plain `mailto:` link, and the visual direction is
+specified in `docs/design-system.md`.
 
 ## Licence
 
