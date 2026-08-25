@@ -87,15 +87,23 @@ export async function rotasPorVideo(): Promise<Map<string, RotaLigada>> {
  * pins. Measured at ~3KB for a 130km route.
  */
 /**
- * Metres. Overview only — route pages parse the same file at 10m.
+ * Metres. Tied to the deepest zoom the map allows, so the line can stay drawn
+ * all the way in instead of being withdrawn.
  *
- * Chosen from point *spacing*, not from the deviation error: what makes a
- * simplified line look crude is the gap between vertices, and at 100m this
- * route's points land 23px apart at zoom 12 — which is exactly where the map
- * opens — so the ride read as a polygon. 40m puts them ~16px apart for about
- * 45% more bytes, and MAX_PONTOS still bounds the worst case for a long route.
+ * Two things drive the number, both measured on a real 26.6km track. Point
+ * *spacing* is what makes a simplified line look crude — at 100m the vertices
+ * landed 23px apart at zoom 12, where the map opens, and the ride read as a
+ * polygon. Deviation is what makes it *lie*: at maxZoom 16 a metre is about
+ * half a pixel, so a 40m tolerance put the line up to 21px off the road — wider
+ * than the lane it claims to follow. 10m keeps it inside 5px there, which is
+ * inside the road, and costs ~2.9KB for that track.
+ *
+ * Below 10m the point cap starts binding before the tolerance does, so paying
+ * for more precision buys nothing on a long route. Which is the caveat: a route
+ * long enough to hit MAX_PONTOS is coarsened past this figure and will drift
+ * from the road at the deepest zooms. Its own page still draws the full track.
  */
-const TOLERANCIA_VISTA_GERAL = 40;
+const TOLERANCIA_VISTA_GERAL = 10;
 /**
  * Hard cap per route, after simplification — shared out across that route's
  * segments, the way trackToSvgPath() does it. Applying it per segment instead

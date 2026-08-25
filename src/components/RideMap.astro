@@ -887,18 +887,14 @@ const markers = pins.map(({ name, lat, lng, voltas }, index) => ({
 			for (const rota of tracks) for (const seg of rota) linhas.push(traco(seg, 'ink'));
 
 			/*
-			 * Withdraw the tracks past the zoom where their simplification stops
-			 * being honest. Simplified to 100m, a line is finer than a pixel at
-			 * national zoom but cuts corners across whole blocks by z17. Better to
-			 * take the schematic away than to draw a road where the road is not.
+			 * Drawn at every zoom, including the deepest. An earlier version withdrew
+			 * them past z13 because the simplification was coarse enough to put the
+			 * line off the road at street level; the tolerance in rotas.ts is now
+			 * chosen against maxZoom instead, so there is nothing to hide from. A
+			 * track that vanishes as the reader zooms in to look at it more closely
+			 * is the wrong answer to that problem.
 			 */
-			const ZOOM_MAX_TRACADO = 13;
-			const faixa = L.layerGroup(linhas).addTo(map);
-			map.on('zoomend', () => {
-				const mostrar = map.getZoom() <= ZOOM_MAX_TRACADO;
-				if (mostrar && !map.hasLayer(faixa)) faixa.addTo(map);
-				if (!mostrar && map.hasLayer(faixa)) map.removeLayer(faixa);
-			});
+			L.layerGroup(linhas).addTo(map);
 		}
 
 		const icones = new Map<number, L.DivIcon>();

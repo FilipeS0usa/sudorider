@@ -1144,11 +1144,13 @@ and pushes the zoom controls off screen.
 
 **Route tracks.** The map draws every published route's GPX as a line under the pins — ink over a
 light casing, `interactive: false`, in the overlay pane so markers stay above it. Simplify for the
-zoom the map is actually used at: 100m tolerance, which is finer than a pixel nationally and about
-3KB for a 130km route. That honesty has a ceiling — at z13 the error is ~7px and by z16 it is a
-corner cut across a whole block — so the tracks are removed above **z13** rather than left to draw
-a road where the road is not. Share the point budget across a route's segments rather than applying it to
-each — a GPX with recording pauses in it otherwise buys one budget per pause. A linear route is the
+the deepest zoom the map allows, not the shallowest: **10m**, which holds the line inside ~5px of
+the road at maxZoom — inside the lane — and costs ~2.9KB for a 27km track. Choosing the tolerance
+for the opening zoom instead gives a line that reads well from far away and lies close up. Tracks
+are therefore drawn at **every** zoom; do not reintroduce a cutoff, which only ever compensated for
+a tolerance chosen too coarse. Share the point budget across a route's segments rather than
+applying it to each — a GPX with recording pauses in it otherwise buys one budget per pause, and a
+route that hits the cap is coarsened past 10m and will drift at street level. A linear route is the
 case this exists for; a pin alone puts a 130km ride and a 5km loop at the same dot. The initial
 `fitBounds` is computed over pins *and* track points, so a route running away from its pin cannot
 start off screen. (The pannable box is not: it is the whole world — see §5.4.)

@@ -194,12 +194,25 @@ the track, a 130km run down the Costa Vicentina and a 5km loop are the same dot.
 reads every published route's GPX at build time (`tracadosDasRotas()`) and bakes the coordinates
 in alongside the pins.
 
-The overview simplifies far harder than a route page does: 100m tolerance against the route
-page's 10m, because at national zoom a point every 100m is already finer than a pixel. That is
-what makes it affordable — measured at ~3KB for a 130km route, so twenty-five of them cost on the
-order of 75KB of coordinates. The point cap is shared out across a route's segments rather than
-applied to each one: a GPX recorded with pauses in it arrives as a dozen segments, and a per-segment
-cap silently buys a dozen budgets. Tracks are drawn `interactive: false` and land in the overlay pane, so the
+**The overview's simplification tolerance is set by the deepest zoom, not the shallowest.** It
+sits at 10m, the same as a route page. Two earlier figures were tried and both were wrong for the
+same reason: they were chosen for how the line looks zoomed *out*. At 100m the vertices landed 23px
+apart at the opening zoom and the ride read as a polygon; at 40m that was fixed, but by maxZoom the
+line ran up to 21px from the road — wider than the lane it claimed to follow. 10m holds it inside
+5px there, which is inside the road, and costs ~2.9KB for a 27km track.
+
+Below 10m the point cap binds before the tolerance does, so paying for more precision buys nothing
+on a long route — which is why 10m is where this stops. The consequence to know: a route long
+enough to hit `MAX_PONTOS` is coarsened past 10m and will drift from the road at the deepest zooms.
+Its own page still draws the full track.
+
+Because of that the tracks are drawn at **every** zoom. An earlier version withdrew them past z13,
+which was the right response to a 40m line and the wrong one to have to make — a track that
+vanishes as the reader zooms in to look at it is not a fix.
+
+The point cap is shared out across a route's segments rather than applied to each one: a GPX
+recorded with pauses in it arrives as a dozen segments, and a per-segment cap silently buys a dozen
+budgets. Tracks are drawn `interactive: false` and land in the overlay pane, so the
 pins in the marker pane stay on top, a track can never swallow a click meant for a pin, and
 nothing new enters the accessibility tree. The routes are listed in text under the map from the
 same source that draws them, so the alternative cannot advertise a route the map does not show.
