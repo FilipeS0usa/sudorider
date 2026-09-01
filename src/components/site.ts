@@ -12,6 +12,8 @@ export const SITE = {
 	youtubeHandle: '@SudoRider',
 	instagram: 'https://www.instagram.com/sudo.rider/',
 	instagramHandle: '@sudo.rider',
+	tiktok: 'https://www.tiktok.com/@sudorider',
+	tiktokHandle: '@sudorider',
 	description:
 		'SudoRider — motovlog de Filipe numa CFMOTO 450 MT, a Dora, por Portugal e por onde a estrada levar.',
 	/**

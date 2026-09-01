@@ -848,8 +848,8 @@ rather than letting the page look truncated.
 │  SudoRider                    Navegação          Segue               │
 │  trocar os ecrãs por um       Início   Rotas     YouTube             │
 │  capacete                     Vídeos   Equip.    Instagram           │
-│                               Mapa     Sobre     info@sudorider.com  │
-│                                        Contacto                      │
+│                               Mapa     Sobre     TikTok              │
+│                                        Contacto  info@sudorider.com  │
 ├──────────────────────────────────────────────────────────────────────┤
 │  © 2026 SudoRider · Código MIT · Conteúdo CC BY-SA 4.0               │
 └──────────────────────────────────────────────────────────────────────┘
@@ -1244,7 +1244,9 @@ an email link solves.
 │  ┌──────────────────────────────────────────────┐  │
 │  │  [▶] YouTube      @SudoRider          →      │  │
 │  ├──────────────────────────────────────────────┤  │
-│  │  [◎] Instagram    @sudorider          →      │  │
+│  │  [◎] Instagram    @sudo.rider         →      │  │
+│  ├──────────────────────────────────────────────┤  │
+│  │  [♪] TikTok       @sudorider          →      │  │
 │  └──────────────────────────────────────────────┘  │
 │                                                    │
 │  Normalmente respondo em poucos dias.              │  --fs-200, muted
