@@ -4,7 +4,7 @@ date: 2026-08-23
 region: Alentejo
 distanceKm: 27
 gpx: evora-motovlog-2.gpx
-video: njqW-k97TTA
+video: [njqW-k97TTA, QWcA4j34BsA]
 summary: Uma volta curta pelos arredores de Évora, ao fim da tarde.
 draft: false
 ---
